@@ -273,9 +273,9 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--pr
 // ============================================================
 // CONFIGURAÇÃO SUPABASE
 // ============================================================
-const SUPABASE_URL = 'https://seu-projeto.supabase.co'; // <--- Altere para a sua URL do Supabase
-const SUPABASE_KEY = 'sua-chave-anon-public';         // <--- Altere para a sua chave pública anónima do Supabase
-const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const supabaseUrl = 'https://vpkhkamjhajufaacnupm.supabase.co' 
+const supabaseKey = process.env.SUPABASE_KEY​​​​
+const supabase = createClient ( supabaseUrl , supabaseKey )
 
 // ============================================================
 // STATE & CONFIG
