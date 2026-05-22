@@ -1,0 +1,1363 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LCDPR Digital — Livro Caixa Digital do Produtor Rural</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #f0f4f8;
+  --sidebar: #0f2137;
+  --sidebar-hover: #1a3550;
+  --sidebar-active: #1e90ff;
+  --card: #ffffff;
+  --border: #e2e8f0;
+  --text: #1a202c;
+  --text2: #4a5568;
+  --text3: #718096;
+  --primary: #1e90ff;
+  --primary-dark: #1565c0;
+  --success: #16a34a;
+  --danger: #dc2626;
+  --warning: #d97706;
+  --info: #0891b2;
+  --input-bg: #f8fafc;
+  --radius: 10px;
+  --shadow: 0 2px 8px rgba(0,0,0,0.08);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.12);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);display:flex;min-height:100vh;font-size:14px}
+a{color:var(--primary);text-decoration:none}
+
+/* SIDEBAR */
+#sidebar{width:240px;min-width:240px;background:var(--sidebar);display:flex;flex-direction:column;position:fixed;top:0;left:0;height:100vh;z-index:100;transition:transform .3s}
+.sidebar-logo{padding:24px 20px 16px;border-bottom:1px solid rgba(255,255,255,0.08)}
+.sidebar-logo h1{color:#fff;font-size:16px;font-weight:700;letter-spacing:-.3px}
+.sidebar-logo span{color:rgba(255,255,255,0.45);font-size:11px;display:block;margin-top:2px}
+.sidebar-menu{flex:1;overflow-y:auto;padding:12px 0}
+.menu-section{color:rgba(255,255,255,0.3);font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;padding:12px 20px 6px}
+.menu-item{display:flex;align-items:center;gap:10px;padding:9px 20px;color:rgba(255,255,255,0.65);cursor:pointer;transition:all .15s;border-left:3px solid transparent;font-size:13px}
+.menu-item:hover{background:var(--sidebar-hover);color:#fff}
+.menu-item.active{background:rgba(30,144,255,0.15);color:var(--sidebar-active);border-left-color:var(--sidebar-active)}
+.menu-item svg{width:16px;height:16px;flex-shrink:0}
+.sidebar-footer{padding:16px 20px;border-top:1px solid rgba(255,255,255,0.08)}
+.sidebar-footer small{color:rgba(255,255,255,0.3);font-size:10px}
+
+/* MAIN */
+#main{margin-left:240px;flex:1;display:flex;flex-direction:column;min-height:100vh}
+.topbar{background:var(--card);border-bottom:1px solid var(--border);padding:0 28px;height:60px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
+.topbar h2{font-size:17px;font-weight:700;color:var(--text)}
+.topbar-right{display:flex;align-items:center;gap:12px}
+.badge-year{background:#e8f4ff;color:var(--primary);font-size:12px;font-weight:700;padding:4px 12px;border-radius:20px}
+#content{padding:28px;flex:1}
+
+/* CARDS */
+.cards-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:16px;margin-bottom:28px}
+.stat-card{background:var(--card);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow);border:1px solid var(--border)}
+.stat-card .label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--text3);margin-bottom:8px}
+.stat-card .value{font-size:22px;font-weight:800;color:var(--text);letter-spacing:-.5px}
+.stat-card .sub{font-size:11px;color:var(--text3);margin-top:4px}
+.stat-card.green .value{color:var(--success)}
+.stat-card.red .value{color:var(--danger)}
+.stat-card.blue .value{color:var(--primary)}
+
+/* CHARTS */
+.charts-row{display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:28px}
+.chart-card{background:var(--card);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow);border:1px solid var(--border)}
+.chart-card h3{font-size:13px;font-weight:700;color:var(--text2);margin-bottom:16px;text-transform:uppercase;letter-spacing:.5px}
+.chart-wrap{position:relative;height:220px}
+
+/* TABLE */
+.table-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);border:1px solid var(--border);overflow:hidden}
+.table-header{padding:16px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)}
+.table-header h3{font-size:14px;font-weight:700}
+.table-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.search-box{display:flex;align-items:center;gap:6px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px}
+.search-box input{border:none;background:none;font-size:13px;color:var(--text);width:160px;outline:none}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:#f8fafc;color:var(--text3);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.6px;padding:10px 12px;text-align:left;border-bottom:1px solid var(--border);cursor:pointer;user-select:none;white-space:nowrap}
+th:hover{color:var(--primary)}
+td{padding:10px 12px;border-bottom:1px solid #f1f5f9;color:var(--text);vertical-align:middle}
+tr:hover td{background:#fafcff}
+tr:last-child td{border-bottom:none}
+.tfoot-row td{background:#f8fafc;font-weight:700;color:var(--text);border-top:2px solid var(--border)}
+.receita-val{color:var(--success);font-weight:700}
+.despesa-val{color:var(--danger);font-weight:700}
+.saldo-pos{color:var(--success);font-weight:700}
+.saldo-neg{color:var(--danger);font-weight:700}
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .15s;white-space:nowrap}
+.btn svg{width:15px;height:15px}
+.btn-primary{background:var(--primary);color:#fff}
+.btn-primary:hover{background:var(--primary-dark)}
+.btn-success{background:var(--success);color:#fff}
+.btn-success:hover{background:#15803d}
+.btn-danger{background:var(--danger);color:#fff}
+.btn-danger:hover{background:#b91c1c}
+.btn-warning{background:var(--warning);color:#fff}
+.btn-warning:hover{background:#b45309}
+.btn-outline{background:#fff;color:var(--text);border:1px solid var(--border)}
+.btn-outline:hover{background:#f8fafc;border-color:var(--primary);color:var(--primary)}
+.btn-ghost{background:none;color:var(--text2);border:none;padding:6px 8px}
+.btn-ghost:hover{background:#f1f5f9;color:var(--danger)}
+.btn-sm{padding:5px 10px;font-size:12px}
+
+/* FORMS */
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px}
+.form-group{display:flex;flex-direction:column;gap:5px}
+.form-group label{font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px}
+.form-control{border:1px solid var(--border);border-radius:7px;padding:9px 12px;font-size:13px;color:var(--text);background:var(--input-bg);transition:border .15s;width:100%;font-family:inherit}
+.form-control:focus{outline:none;border-color:var(--primary);background:#fff;box-shadow:0 0 0 3px rgba(30,144,255,0.1)}
+textarea.form-control{resize:vertical;min-height:72px}
+select.form-control{cursor:pointer}
+.form-section{background:var(--card);border-radius:var(--radius);padding:24px;box-shadow:var(--shadow);border:1px solid var(--border);margin-bottom:20px}
+.form-section-title{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--text2);margin-bottom:20px;padding-bottom:12px;border-bottom:1px solid var(--border)}
+
+/* BADGES */
+.badge{display:inline-flex;align-items:center;padding:3px 9px;border-radius:12px;font-size:11px;font-weight:700}
+.badge-normal{background:#e8f5e9;color:#2e7d32}
+.badge-p{background:#fff3e0;color:#e65100}
+.badge-receita{background:#dcfce7;color:#15803d}
+.badge-despesa{background:#fee2e2;color:#b91c1c}
+.badge-adiantamento{background:#ede9fe;color:#7c3aed}
+
+/* PAGINATION */
+.pagination{display:flex;align-items:center;gap:4px;padding:12px 20px;border-top:1px solid var(--border)}
+.page-btn{border:1px solid var(--border);background:#fff;color:var(--text);border-radius:6px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s}
+.page-btn:hover,.page-btn.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+.page-info{font-size:12px;color:var(--text3);margin-left:8px}
+
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px;opacity:0;pointer-events:none;transition:opacity .2s}
+.modal-overlay.open{opacity:1;pointer-events:all}
+.modal{background:var(--card);border-radius:14px;box-shadow:var(--shadow-lg);width:100%;max-width:680px;max-height:90vh;overflow-y:auto;transform:translateY(20px);transition:transform .2s}
+.modal-overlay.open .modal{transform:translateY(0)}
+.modal-header{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.modal-header h3{font-size:16px;font-weight:800}
+.modal-body{padding:24px}
+.modal-footer{padding:16px 24px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px}
+
+/* TOAST */
+#toast-container{position:fixed;top:20px;right:20px;z-index:999;display:flex;flex-direction:column;gap:8px}
+.toast{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 16px;box-shadow:var(--shadow-lg);font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;min-width:260px;animation:slideIn .2s ease}
+.toast.success{border-left:4px solid var(--success);color:var(--success)}
+.toast.error{border-left:4px solid var(--danger);color:var(--danger)}
+.toast.info{border-left:4px solid var(--primary);color:var(--primary)}
+@keyframes slideIn{from{transform:translateX(40px);opacity:0}to{transform:translateX(0);opacity:1}}
+
+/* VALIDATION */
+.validation-error{background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px 16px;margin-bottom:8px}
+.validation-error strong{color:var(--danger);font-size:12px}
+.validation-error p{color:#7f1d1d;font-size:12px;margin-top:2px}
+
+/* TXT PREVIEW */
+.txt-preview{background:#0f2137;color:#a8d8ea;font-family:'Courier New',monospace;font-size:11px;padding:16px;border-radius:8px;overflow-x:auto;white-space:pre;max-height:300px;overflow-y:auto}
+
+/* REPORT TABLE */
+.report-table th{font-size:11px}
+.report-table td{font-size:12px}
+
+/* EMPTY STATE */
+.empty-state{text-align:center;padding:60px 20px;color:var(--text3)}
+.empty-state svg{width:48px;height:48px;margin:0 auto 12px;opacity:.3}
+.empty-state h3{font-size:16px;font-weight:700;margin-bottom:6px;color:var(--text2)}
+.empty-state p{font-size:13px}
+
+/* CONSOLIDATION */
+.consol-table{width:100%;border-collapse:collapse;font-size:13px}
+.consol-table th{background:#f8fafc;color:var(--text3);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:10px 14px;border-bottom:2px solid var(--border)}
+.consol-table td{padding:10px 14px;border-bottom:1px solid #f1f5f9}
+.consol-table tr:hover td{background:#fafcff}
+.tipo-P{color:var(--success);font-weight:800}
+.tipo-N{color:var(--danger);font-weight:800}
+
+/* RESPONSIVE */
+@media(max-width:900px){#sidebar{transform:translateX(-240px)}.sidebar-open #sidebar{transform:translateX(0)}#main{margin-left:0}.charts-row{grid-template-columns:1fr}}
+@media print{#sidebar,#topbar,.btn,#toast-container{display:none!important}#main{margin:0}#content{padding:0}}
+
+/* CHECKBOX */
+input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--primary)}
+
+/* TABS */
+.tabs{display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:24px}
+.tab-btn{padding:10px 20px;font-size:13px;font-weight:700;color:var(--text3);cursor:pointer;border:none;background:none;border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .15s}
+.tab-btn.active{color:var(--primary);border-bottom-color:var(--primary)}
+.tab-btn:hover{color:var(--primary)}
+
+/* SUMMARY ROW */
+.summary-bar{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
+.sum-item{background:var(--card);border-radius:8px;padding:14px;border:1px solid var(--border);text-align:center}
+.sum-item .sl{font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px}
+.sum-item .sv{font-size:18px;font-weight:800}
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<nav id="sidebar">
+  <div class="sidebar-logo">
+    <h1>🌿 LCDPR Digital</h1>
+    <span>Receita Federal — v3.1</span>
+  </div>
+  <div class="sidebar-menu">
+    <div class="menu-section">Principal</div>
+    <div class="menu-item active" onclick="navigate('dashboard')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      Dashboard
+    </div>
+    <div class="menu-section">Lançamentos</div>
+    <div class="menu-item" onclick="navigate('novo')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+      Novo Lançamento
+    </div>
+    <div class="menu-item" onclick="navigate('lancamentos')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="2"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg>
+      Todos os Lançamentos
+    </div>
+    <div class="menu-section">Exportação</div>
+    <div class="menu-item" onclick="navigate('exportacao')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 18 15 15"/></svg>
+      Exportar LCDPR TXT
+    </div>
+    <div class="menu-section">Relatórios</div>
+    <div class="menu-item" onclick="navigate('consolidacao')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      Consolidação Mensal
+    </div>
+    <div class="menu-item" onclick="navigate('demonstrativo')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+      Demonstrativo
+    </div>
+    <div class="menu-section">Configurações</div>
+    <div class="menu-item" onclick="navigate('config')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+      Configurações
+    </div>
+  </div>
+  <div class="sidebar-footer">
+    <small>LCDPR Digital © 2025<br>Receita Federal BR</small>
+  </div>
+</nav>
+
+<!-- MAIN -->
+<div id="main">
+  <div class="topbar" id="topbar">
+    <h2 id="page-title">Dashboard</h2>
+    <div class="topbar-right">
+      <span class="badge-year" id="ano-badge">Ano: 2025</span>
+      <button class="btn btn-primary btn-sm" onclick="navigate('novo')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Novo Lançamento
+      </button>
+    </div>
+  </div>
+  <div id="content"></div>
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modal-overlay" onclick="fecharModal(event)">
+  <div class="modal" id="modal">
+    <div class="modal-header">
+      <h3 id="modal-title">Confirmação</h3>
+      <button class="btn btn-ghost" onclick="fecharModal()">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-footer" id="modal-footer"></div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast-container"></div>
+
+<script>
+// ============================================================
+// STATE & PERSISTENCE
+// ============================================================
+const STORAGE_KEY = 'lcdpr_data_v2';
+
+let state = {
+  lancamentos: [],
+  imoveis: [
+    {id:'IM001', codigo:'IM001', descricao:'Fazenda Santa Clara', municipio:'Londrina', uf:'PR'},
+    {id:'IM002', codigo:'IM002', descricao:'Sítio Boa Vista', municipio:'Maringá', uf:'PR'},
+    {id:'IM003', codigo:'IM003', descricao:'Chácara São João', municipio:'Cascavel', uf:'PR'},
+  ],
+  contas: [
+    {id:'CC001', codigo:'CC001', descricao:'Banco do Brasil - Conta Corrente'},
+    {id:'CC002', codigo:'CC002', descricao:'Caixa Econômica - Poupança Rural'},
+    {id:'CC003', codigo:'CC003', descricao:'Sicredi - Conta Corrente'},
+    {id:'CC004', codigo:'CC004', descricao:'Caixa - Conta Corrente'},
+  ],
+  cpfProdutor: '',
+  nomeProdutor: '',
+  anoCalendario: new Date().getFullYear(),
+  editingId: null,
+  currentPage: 1,
+  itemsPerPage: 20,
+  filterTipo: '',
+  filterImovel: '',
+  filterSearch: '',
+  sortCol: 'data',
+  sortDir: 'asc',
+  selectedIds: new Set(),
+};
+
+function saveState() {
+  const toSave = {...state, selectedIds: []};
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      state = {...state, ...parsed, selectedIds: new Set()};
+    }
+  } catch(e) {}
+  // Seed data if empty
+  if (state.lancamentos.length === 0) seedData();
+}
+
+function seedData() {
+  const seeds = [
+    {data:'2025-01-10',codigoImovel:'IM001',codigoConta:'CC001',numeroDocumento:'NF-0001',tipoDocumento:1,historico:'Venda de soja safra 2024/2025 - Lote 01',cpfCnpj:'12.345.678/0001-99',tipoLancamento:1,valor:1200000,situacao:'N'},
+    {data:'2025-01-22',codigoImovel:'IM001',codigoConta:'CC001',numeroDocumento:'REC-0010',tipoDocumento:3,historico:'Compra de sementes de milho - fornecedor Agrosul',cpfCnpj:'987.654.321-00',tipoLancamento:2,valor:380000,situacao:'N'},
+    {data:'2025-02-05',codigoImovel:'IM002',codigoConta:'CC002',numeroDocumento:'NF-0015',tipoDocumento:1,historico:'Venda de milho - Cooperativa Regional',cpfCnpj:'11.222.333/0001-44',tipoLancamento:1,valor:850000,situacao:'N'},
+    {data:'2025-02-18',codigoImovel:'IM001',codigoConta:'CC001',numeroDocumento:'FAT-0023',tipoDocumento:2,historico:'Pagamento de defensivos agrícolas',cpfCnpj:'55.666.777/0001-88',tipoLancamento:2,valor:290000,situacao:'N'},
+    {data:'2025-03-08',codigoImovel:'IM003',codigoConta:'CC003',numeroDocumento:'NF-0031',tipoDocumento:1,historico:'Venda de trigo - Exportação',cpfCnpj:'22.333.444/0001-55',tipoLancamento:1,valor:2100000,situacao:'N'},
+    {data:'2025-03-15',codigoImovel:'IM002',codigoConta:'CC002',numeroDocumento:'FP-0001',tipoDocumento:5,historico:'Folha de pagamento - colaboradores março',cpfCnpj:'111.222.333-44',tipoLancamento:2,valor:450000,situacao:'N'},
+    {data:'2025-04-03',codigoImovel:'IM001',codigoConta:'CC001',numeroDocumento:'NF-0042',tipoDocumento:1,historico:'Venda de algodão - Lote 02',cpfCnpj:'33.444.555/0001-66',tipoLancamento:1,valor:750000,situacao:'N'},
+    {data:'2025-04-20',codigoImovel:'IM001',codigoConta:'CC001',numeroDocumento:'CTR-0005',tipoDocumento:4,historico:'Manutenção de máquinas agrícolas',cpfCnpj:'444.555.666-77',tipoLancamento:2,valor:180000,situacao:'N'},
+    {data:'2025-05-12',codigoImovel:'IM003',codigoConta:'CC003',numeroDocumento:'NF-0058',tipoDocumento:1,historico:'Venda de cana-de-açúcar - Usina Norte',cpfCnpj:'77.888.999/0001-00',tipoLancamento:1,valor:680000,situacao:'P'},
+    {data:'2025-05-28',codigoImovel:'IM002',codigoConta:'CC002',numeroDocumento:'REC-0041',tipoDocumento:3,historico:'Compra de fertilizantes NPK',cpfCnpj:'888.999.000-11',tipoLancamento:2,valor:320000,situacao:'N'},
+  ];
+  state.lancamentos = seeds.map(s => ({...s, id: genId(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()}));
+  saveState();
+}
+
+function genId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2);
+}
+
+// ============================================================
+// FORMATTERS
+// ============================================================
+function formatBRL(centavos) {
+  return (centavos / 100).toLocaleString('pt-BR', {style:'currency',currency:'BRL'});
+}
+
+function formatDate(iso) {
+  if (!iso) return '';
+  const [y,m,d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+function formatLCDPR(centavos) {
+  return String(Math.abs(Math.round(centavos))).padStart(18, '0');
+}
+
+function formatDataLCDPR(iso) {
+  const [y,m,d] = iso.split('-');
+  return `${d}${m}${y}`;
+}
+
+function formatMesAnoLCDPR(iso) {
+  const [y,m] = iso.split('-');
+  return `${m}${y}`;
+}
+
+function maskCpfCnpj(v) {
+  const d = v.replace(/\D/g,'');
+  if (d.length <= 11) return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/,'$1.$2.$3-$4');
+  return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/,'$1.$2.$3/$4-$5');
+}
+
+function parseBRL(v) {
+  return Math.round(parseFloat(v.replace(/\./g,'').replace(',','.') || '0') * 100);
+}
+
+function formatInputBRL(centavos) {
+  return (centavos/100).toFixed(2).replace('.',',');
+}
+
+function tipoLanctoLabel(t) {
+  return {1:'Receita',2:'Despesa',3:'Adiantamento'}[t] || '';
+}
+
+function tipoDocLabel(t) {
+  return {1:'Nota Fiscal',2:'Fatura',3:'Recibo',4:'Contrato',5:'Folha Pgto',6:'Outros'}[t] || '';
+}
+
+function mesLabel(mm) {
+  const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  return meses[parseInt(mm)-1] || mm;
+}
+
+// ============================================================
+// CALCULATORS
+// ============================================================
+function calcularSaldos(lancamentos) {
+  const sorted = [...lancamentos].sort((a,b) => {
+    const da = new Date(a.data).getTime(), db = new Date(b.data).getTime();
+    return da !== db ? da - db : a.createdAt.localeCompare(b.createdAt);
+  });
+  let saldo = 0;
+  return sorted.map(l => {
+    if (l.tipoLancamento === 1) saldo += l.valor;
+    else if (l.tipoLancamento === 2) saldo -= l.valor;
+    return {...l, saldoFinal: saldo};
+  });
+}
+
+function consolidarPorMes(lancamentos) {
+  const map = {};
+  for (const l of lancamentos) {
+    const chave = formatMesAnoLCDPR(l.data);
+    if (!map[chave]) map[chave] = {receitas:0,despesas:0,qtd:0};
+    if (l.tipoLancamento === 1) map[chave].receitas += l.valor;
+    else if (l.tipoLancamento === 2) map[chave].despesas += l.valor;
+    map[chave].qtd++;
+  }
+  return Object.entries(map)
+    .sort(([a],[b]) => {
+      const toN = k => parseInt(k.slice(2))*100 + parseInt(k.slice(0,2));
+      return toN(a) - toN(b);
+    })
+    .map(([mesAno,{receitas,despesas,qtd}]) => {
+      const resultado = receitas - despesas;
+      return {mesAno, receitas, despesas, resultado: Math.abs(resultado), tipo: resultado >= 0 ? 'P' : 'N', qtdLancamentos: qtd};
+    });
+}
+
+function getStats() {
+  const lancamentos = calcularSaldos(state.lancamentos);
+  let totalReceitas = 0, totalDespesas = 0;
+  for (const l of lancamentos) {
+    if (l.tipoLancamento === 1) totalReceitas += l.valor;
+    else if (l.tipoLancamento === 2) totalDespesas += l.valor;
+  }
+  const saldoAtual = lancamentos.length ? lancamentos[lancamentos.length-1].saldoFinal : 0;
+  const consolidado = consolidarPorMes(lancamentos);
+  const mesesPos = consolidado.filter(m => m.tipo === 'P').length;
+  const mesesNeg = consolidado.filter(m => m.tipo === 'N').length;
+  return {totalReceitas, totalDespesas, saldoAtual, mesesPos, mesesNeg, totalLancamentos: lancamentos.length, lancamentos, consolidado};
+}
+
+// ============================================================
+// NAVIGATION
+// ============================================================
+let currentPage = 'dashboard';
+
+function navigate(page) {
+  currentPage = page;
+  document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active'));
+  const map = {dashboard:0,novo:1,lancamentos:2,exportacao:3,consolidacao:4,demonstrativo:5,config:6};
+  const items = document.querySelectorAll('.menu-item');
+  if (items[map[page]]) items[map[page]].classList.add('active');
+
+  const titles = {
+    dashboard:'Dashboard',novo:'Novo Lançamento',lancamentos:'Todos os Lançamentos',
+    exportacao:'Exportar LCDPR TXT',consolidacao:'Consolidação Mensal (Q200)',
+    demonstrativo:'Demonstrativo de Lançamentos',config:'Configurações'
+  };
+  document.getElementById('page-title').textContent = titles[page] || page;
+  state.editingId = null;
+  renderPage(page);
+}
+
+function renderPage(page) {
+  const el = document.getElementById('content');
+  switch(page) {
+    case 'dashboard': el.innerHTML = renderDashboard(); initCharts(); break;
+    case 'novo': el.innerHTML = renderForm(); break;
+    case 'lancamentos': el.innerHTML = renderLancamentos(); break;
+    case 'exportacao': el.innerHTML = renderExportacao(); break;
+    case 'consolidacao': el.innerHTML = renderConsolidacao(); break;
+    case 'demonstrativo': el.innerHTML = renderDemonstrativo(); break;
+    case 'config': el.innerHTML = renderConfig(); break;
+  }
+}
+
+// ============================================================
+// DASHBOARD
+// ============================================================
+function renderDashboard() {
+  const {totalReceitas, totalDespesas, saldoAtual, mesesPos, mesesNeg, totalLancamentos, lancamentos} = getStats();
+  const ultimos = [...lancamentos].reverse().slice(0,6);
+
+  return `
+  <div class="cards-grid">
+    <div class="stat-card green">
+      <div class="label">Total Receitas</div>
+      <div class="value">${formatBRL(totalReceitas)}</div>
+      <div class="sub">Todas as entradas</div>
+    </div>
+    <div class="stat-card red">
+      <div class="label">Total Despesas</div>
+      <div class="value">${formatBRL(totalDespesas)}</div>
+      <div class="sub">Todos os gastos</div>
+    </div>
+    <div class="stat-card ${saldoAtual >= 0 ? 'green' : 'red'}">
+      <div class="label">Saldo Atual</div>
+      <div class="value">${formatBRL(saldoAtual)}</div>
+      <div class="sub">${saldoAtual >= 0 ? '▲ Positivo' : '▼ Negativo'}</div>
+    </div>
+    <div class="stat-card blue">
+      <div class="label">Lançamentos</div>
+      <div class="value">${totalLancamentos}</div>
+      <div class="sub">Registros totais</div>
+    </div>
+    <div class="stat-card green">
+      <div class="label">Meses Positivos</div>
+      <div class="value">${mesesPos}</div>
+      <div class="sub">Resultado favorável</div>
+    </div>
+    <div class="stat-card red">
+      <div class="label">Meses Negativos</div>
+      <div class="value">${mesesNeg}</div>
+      <div class="sub">Resultado desfavorável</div>
+    </div>
+  </div>
+
+  <div class="charts-row">
+    <div class="chart-card">
+      <h3>Evolução Mensal — Receitas vs Despesas</h3>
+      <div class="chart-wrap"><canvas id="chartBar"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h3>Distribuição por Tipo</h3>
+      <div class="chart-wrap"><canvas id="chartPie"></canvas></div>
+    </div>
+  </div>
+
+  <div class="table-card">
+    <div class="table-header">
+      <h3>Últimos Lançamentos</h3>
+      <button class="btn btn-outline btn-sm" onclick="navigate('lancamentos')">Ver todos →</button>
+    </div>
+    <div style="overflow-x:auto">
+    <table>
+      <thead><tr>
+        <th>Data</th><th>Imóvel</th><th>Histórico</th><th>Tipo</th><th>Valor</th><th>Saldo</th>
+      </tr></thead>
+      <tbody>
+        ${ultimos.length === 0 ? `<tr><td colspan="6"><div class="empty-state"><p>Nenhum lançamento encontrado.</p></div></td></tr>` :
+          ultimos.map(l => `
+          <tr>
+            <td>${formatDate(l.data)}</td>
+            <td>${l.codigoImovel}</td>
+            <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${l.historico}</td>
+            <td><span class="badge ${l.tipoLancamento===1?'badge-receita':l.tipoLancamento===2?'badge-despesa':'badge-adiantamento'}">${tipoLanctoLabel(l.tipoLancamento)}</span></td>
+            <td class="${l.tipoLancamento===1?'receita-val':'despesa-val'}">${formatBRL(l.valor)}</td>
+            <td class="${l.saldoFinal>=0?'saldo-pos':'saldo-neg'}">${formatBRL(l.saldoFinal)}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>
+    </div>
+  </div>`;
+}
+
+function initCharts() {
+  const {consolidado} = getStats();
+  const labels = consolidado.map(c => mesLabel(c.mesAno.slice(0,2))+'/'+c.mesAno.slice(2));
+  const rec = consolidado.map(c => c.receitas/100);
+  const desp = consolidado.map(c => c.despesas/100);
+  const totalRec = state.lancamentos.filter(l=>l.tipoLancamento===1).reduce((a,b)=>a+b.valor,0);
+  const totalDesp = state.lancamentos.filter(l=>l.tipoLancamento===2).reduce((a,b)=>a+b.valor,0);
+  const totalAdiant = state.lancamentos.filter(l=>l.tipoLancamento===3).reduce((a,b)=>a+b.valor,0);
+
+  const barCtx = document.getElementById('chartBar');
+  if (barCtx) {
+    new Chart(barCtx, {
+      type:'bar',
+      data:{
+        labels: labels.length ? labels : ['Sem dados'],
+        datasets:[
+          {label:'Receitas',data:rec,backgroundColor:'rgba(22,163,74,0.7)',borderRadius:4},
+          {label:'Despesas',data:desp,backgroundColor:'rgba(220,38,38,0.7)',borderRadius:4},
+        ]
+      },
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:11}}}},scales:{y:{beginAtZero:true,ticks:{callback:v=>'R$'+v.toLocaleString('pt-BR')}}}}
+    });
+  }
+
+  const pieCtx = document.getElementById('chartPie');
+  if (pieCtx) {
+    new Chart(pieCtx, {
+      type:'doughnut',
+      data:{
+        labels:['Receitas','Despesas','Adiantamentos'],
+        datasets:[{data:[totalRec/100,totalDesp/100,totalAdiant/100],backgroundColor:['rgba(22,163,74,0.8)','rgba(220,38,38,0.8)','rgba(124,58,237,0.8)'],borderWidth:2,borderColor:'#fff'}]
+      },
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:11}}}}}
+    });
+  }
+}
+
+// ============================================================
+// FORM
+// ============================================================
+function renderForm(editing) {
+  const l = editing || {};
+  return `
+  <form id="lancamento-form" onsubmit="salvarLancamento(event)">
+  <div class="form-section">
+    <div class="form-section-title">${state.editingId ? '✏️ Editar Lançamento' : '➕ Novo Lançamento (Q100)'}</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Data *</label>
+        <input type="date" class="form-control" id="f-data" value="${l.data||new Date().toISOString().slice(0,10)}" required>
+      </div>
+      <div class="form-group">
+        <label>Imóvel Rural *</label>
+        <select class="form-control" id="f-imovel" required>
+          <option value="">Selecione o imóvel</option>
+          ${state.imoveis.map(i=>`<option value="${i.codigo}" ${l.codigoImovel===i.codigo?'selected':''}>${i.codigo} — ${i.descricao}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Conta Bancária *</label>
+        <select class="form-control" id="f-conta" required>
+          <option value="">Selecione a conta</option>
+          ${state.contas.map(c=>`<option value="${c.codigo}" ${l.codigoConta===c.codigo?'selected':''}>${c.codigo} — ${c.descricao}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Nº do Documento *</label>
+        <input type="text" class="form-control" id="f-numdoc" value="${l.numeroDocumento||''}" placeholder="Ex: NF-0001" required>
+      </div>
+      <div class="form-group">
+        <label>Tipo do Documento *</label>
+        <select class="form-control" id="f-tipodoc" required>
+          <option value="">Selecione</option>
+          <option value="1" ${l.tipoDocumento==1?'selected':''}>1 — Nota Fiscal</option>
+          <option value="2" ${l.tipoDocumento==2?'selected':''}>2 — Fatura</option>
+          <option value="3" ${l.tipoDocumento==3?'selected':''}>3 — Recibo</option>
+          <option value="4" ${l.tipoDocumento==4?'selected':''}>4 — Contrato</option>
+          <option value="5" ${l.tipoDocumento==5?'selected':''}>5 — Folha de Pagamento</option>
+          <option value="6" ${l.tipoDocumento==6?'selected':''}>6 — Outros</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Tipo de Lançamento *</label>
+        <select class="form-control" id="f-tipolancto" required>
+          <option value="">Selecione</option>
+          <option value="1" ${l.tipoLancamento==1?'selected':''}>1 — Receita da Atividade Rural</option>
+          <option value="2" ${l.tipoLancamento==2?'selected':''}>2 — Despesa / Custeio / Investimento</option>
+          <option value="3" ${l.tipoLancamento==3?'selected':''}>3 — Adiantamento</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>CPF / CNPJ *</label>
+        <input type="text" class="form-control" id="f-cpfcnpj" value="${l.cpfCnpj||''}" placeholder="000.000.000-00 ou 00.000.000/0001-00" oninput="this.value=maskCpfCnpj(this.value)" maxlength="18" required>
+      </div>
+      <div class="form-group">
+        <label>Valor (R$) *</label>
+        <input type="text" class="form-control" id="f-valor" value="${l.valor ? formatInputBRL(l.valor) : ''}" placeholder="0,00" oninput="formatarValor(this)" required>
+      </div>
+      <div class="form-group">
+        <label>Situação *</label>
+        <select class="form-control" id="f-situacao" required>
+          <option value="N" ${l.situacao==='N'||!l.situacao?'selected':''}>N — Normal</option>
+          <option value="P" ${l.situacao==='P'?'selected':''}>P — Participante</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group" style="margin-top:16px">
+      <label>Histórico *</label>
+      <textarea class="form-control" id="f-historico" placeholder="Descreva a origem ou destino do recurso..." required>${l.historico||''}</textarea>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end;flex-wrap:wrap">
+      <button type="button" class="btn btn-outline" onclick="navigate('lancamentos')">Cancelar</button>
+      <button type="button" class="btn btn-outline" onclick="limparForm()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.95"/></svg>
+        Limpar
+      </button>
+      <button type="submit" class="btn btn-primary">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+        ${state.editingId ? 'Atualizar Lançamento' : 'Salvar Lançamento'}
+      </button>
+    </div>
+  </div>
+  </form>`;
+}
+
+function formatarValor(input) {
+  let v = input.value.replace(/\D/g,'');
+  if (!v) {input.value=''; return;}
+  v = parseInt(v);
+  input.value = (v/100).toFixed(2).replace('.',',');
+}
+
+function limparForm() {
+  document.getElementById('lancamento-form').reset();
+}
+
+function salvarLancamento(e) {
+  e.preventDefault();
+  const valor = parseBRL(document.getElementById('f-valor').value);
+  if (valor <= 0) {toast('Informe um valor maior que zero.','error'); return;}
+
+  const dados = {
+    data: document.getElementById('f-data').value,
+    codigoImovel: document.getElementById('f-imovel').value,
+    codigoConta: document.getElementById('f-conta').value,
+    numeroDocumento: document.getElementById('f-numdoc').value.trim(),
+    tipoDocumento: parseInt(document.getElementById('f-tipodoc').value),
+    historico: document.getElementById('f-historico').value.trim(),
+    cpfCnpj: document.getElementById('f-cpfcnpj').value.trim(),
+    tipoLancamento: parseInt(document.getElementById('f-tipolancto').value),
+    valor,
+    situacao: document.getElementById('f-situacao').value,
+    updatedAt: new Date().toISOString(),
+  };
+
+  if (state.editingId) {
+    state.lancamentos = state.lancamentos.map(l => l.id === state.editingId ? {...l,...dados} : l);
+    toast('Lançamento atualizado com sucesso!','success');
+    state.editingId = null;
+  } else {
+    state.lancamentos.push({...dados, id: genId(), createdAt: new Date().toISOString()});
+    toast('Lançamento salvo com sucesso!','success');
+    limparForm();
+  }
+  saveState();
+}
+
+// ============================================================
+// LANCAMENTOS TABLE
+// ============================================================
+function renderLancamentos() {
+  let lancamentos = calcularSaldos(state.lancamentos);
+
+  // Filter
+  if (state.filterTipo) lancamentos = lancamentos.filter(l => l.tipoLancamento == state.filterTipo);
+  if (state.filterImovel) lancamentos = lancamentos.filter(l => l.codigoImovel === state.filterImovel);
+  if (state.filterSearch) {
+    const q = state.filterSearch.toLowerCase();
+    lancamentos = lancamentos.filter(l =>
+      l.historico.toLowerCase().includes(q) ||
+      l.cpfCnpj.includes(q) ||
+      l.numeroDocumento.toLowerCase().includes(q)
+    );
+  }
+
+  // Sort
+  lancamentos.sort((a,b) => {
+    let va = a[state.sortCol], vb = b[state.sortCol];
+    if (typeof va === 'string') va = va.toLowerCase(), vb = vb.toLowerCase();
+    if (va < vb) return state.sortDir === 'asc' ? -1 : 1;
+    if (va > vb) return state.sortDir === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  const total = lancamentos.length;
+  const pages = Math.max(1, Math.ceil(total / state.itemsPerPage));
+  if (state.currentPage > pages) state.currentPage = pages;
+  const start = (state.currentPage - 1) * state.itemsPerPage;
+  const paginated = lancamentos.slice(start, start + state.itemsPerPage);
+
+  const totalRec = lancamentos.filter(l=>l.tipoLancamento===1).reduce((a,b)=>a+b.valor,0);
+  const totalDesp = lancamentos.filter(l=>l.tipoLancamento===2).reduce((a,b)=>a+b.valor,0);
+  const selectedArr = [...state.selectedIds];
+
+  function sortIcon(col) {
+    if (state.sortCol !== col) return '↕';
+    return state.sortDir === 'asc' ? '↑' : '↓';
+  }
+
+  return `
+  <div class="table-card">
+    <div class="table-header">
+      <h3>Lançamentos — ${total} registro(s)</h3>
+      <div class="table-actions">
+        <div class="search-box">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#718096" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" placeholder="Buscar..." value="${state.filterSearch}" oninput="state.filterSearch=this.value;state.currentPage=1;renderPage('lancamentos')">
+        </div>
+        <select class="form-control" style="height:34px;padding:0 8px;font-size:12px;width:auto" onchange="state.filterTipo=this.value;state.currentPage=1;renderPage('lancamentos')">
+          <option value="">Todos os tipos</option>
+          <option value="1" ${state.filterTipo=='1'?'selected':''}>Receita</option>
+          <option value="2" ${state.filterTipo=='2'?'selected':''}>Despesa</option>
+          <option value="3" ${state.filterTipo=='3'?'selected':''}>Adiantamento</option>
+        </select>
+        <select class="form-control" style="height:34px;padding:0 8px;font-size:12px;width:auto" onchange="state.filterImovel=this.value;state.currentPage=1;renderPage('lancamentos')">
+          <option value="">Todos os imóveis</option>
+          ${state.imoveis.map(i=>`<option value="${i.codigo}" ${state.filterImovel===i.codigo?'selected':''}>${i.codigo}</option>`).join('')}
+        </select>
+        ${selectedArr.length > 0 ? `<button class="btn btn-danger btn-sm" onclick="excluirSelecionados()">🗑 Excluir (${selectedArr.length})</button>` : ''}
+        <button class="btn btn-primary btn-sm" onclick="navigate('novo')">+ Novo</button>
+      </div>
+    </div>
+    <div style="overflow-x:auto">
+    <table>
+      <thead><tr>
+        <th style="width:32px"><input type="checkbox" onchange="toggleAll(this)" ${selectedArr.length===paginated.length&&paginated.length>0?'checked':''}></th>
+        <th onclick="sortBy('data')">Data ${sortIcon('data')}</th>
+        <th onclick="sortBy('codigoImovel')">Imóvel ${sortIcon('codigoImovel')}</th>
+        <th>Conta</th>
+        <th>Documento</th>
+        <th onclick="sortBy('historico')">Histórico ${sortIcon('historico')}</th>
+        <th>CPF/CNPJ</th>
+        <th>Receita</th>
+        <th>Despesa</th>
+        <th>Saldo</th>
+        <th>Sit.</th>
+        <th>Ações</th>
+      </tr></thead>
+      <tbody>
+        ${paginated.length === 0 ? `<tr><td colspan="12"><div class="empty-state">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="2"/></svg>
+          <h3>Nenhum lançamento encontrado</h3><p>Use os filtros ou adicione um novo lançamento.</p></div></td></tr>` :
+          paginated.map(l => `
+          <tr>
+            <td><input type="checkbox" ${state.selectedIds.has(l.id)?'checked':''} onchange="toggleSelect('${l.id}',this)"></td>
+            <td style="white-space:nowrap">${formatDate(l.data)}</td>
+            <td><span style="font-size:11px;font-weight:700;color:var(--primary)">${l.codigoImovel}</span></td>
+            <td style="font-size:11px;color:var(--text3)">${l.codigoConta}</td>
+            <td style="font-size:11px">${l.numeroDocumento}</td>
+            <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${l.historico}">${l.historico}</td>
+            <td style="font-size:11px">${l.cpfCnpj}</td>
+            <td class="${l.tipoLancamento===1?'receita-val':''}">${l.tipoLancamento===1?formatBRL(l.valor):'—'}</td>
+            <td class="${l.tipoLancamento===2?'despesa-val':''}">${l.tipoLancamento===2?formatBRL(l.valor):'—'}</td>
+            <td class="${l.saldoFinal>=0?'saldo-pos':'saldo-neg'}" style="white-space:nowrap">${formatBRL(l.saldoFinal)}</td>
+            <td><span class="badge ${l.situacao==='N'?'badge-normal':'badge-p'}">${l.situacao}</span></td>
+            <td style="white-space:nowrap">
+              <button class="btn btn-ghost btn-sm" title="Editar" onclick="editarLancamento('${l.id}')">✏️</button>
+              <button class="btn btn-ghost btn-sm" title="Excluir" onclick="confirmarExclusao('${l.id}')">🗑</button>
+            </td>
+          </tr>`).join('')}
+      </tbody>
+      <tfoot>
+        <tr class="tfoot-row">
+          <td colspan="7" style="color:var(--text3);font-size:12px">TOTAL DA PÁGINA</td>
+          <td class="receita-val">${formatBRL(totalRec)}</td>
+          <td class="despesa-val">${formatBRL(totalDesp)}</td>
+          <td class="${(totalRec-totalDesp)>=0?'saldo-pos':'saldo-neg'}">${formatBRL(totalRec-totalDesp)}</td>
+          <td colspan="2"></td>
+        </tr>
+      </tfoot>
+    </table>
+    </div>
+    <div class="pagination" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <div style="display:flex;gap:4px;align-items:center">
+        <button class="page-btn" onclick="changePage(${state.currentPage-1})" ${state.currentPage<=1?'disabled':''}>‹</button>
+        ${Array.from({length:Math.min(pages,7)},(_, i)=>{
+          let p;
+          if (pages<=7) p=i+1;
+          else if (state.currentPage<=4) p=i+1;
+          else if (state.currentPage>=pages-3) p=pages-6+i;
+          else p=state.currentPage-3+i;
+          return `<button class="page-btn ${p===state.currentPage?'active':''}" onclick="changePage(${p})">${p}</button>`;
+        }).join('')}
+        <button class="page-btn" onclick="changePage(${state.currentPage+1})" ${state.currentPage>=pages?'disabled':''}>›</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="page-info">Mostrando ${start+1}–${Math.min(start+state.itemsPerPage,total)} de ${total}</span>
+        <select class="form-control" style="height:30px;padding:0 6px;font-size:12px;width:auto" onchange="state.itemsPerPage=parseInt(this.value);state.currentPage=1;renderPage('lancamentos')">
+          <option value="10" ${state.itemsPerPage==10?'selected':''}>10/pág</option>
+          <option value="20" ${state.itemsPerPage==20?'selected':''}>20/pág</option>
+          <option value="50" ${state.itemsPerPage==50?'selected':''}>50/pág</option>
+          <option value="100" ${state.itemsPerPage==100?'selected':''}>100/pág</option>
+        </select>
+      </div>
+    </div>
+  </div>`;
+}
+
+function sortBy(col) {
+  if (state.sortCol === col) state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+  else {state.sortCol = col; state.sortDir = 'asc';}
+  renderPage('lancamentos');
+}
+
+function changePage(p) {
+  const total = state.lancamentos.length;
+  const pages = Math.max(1, Math.ceil(total / state.itemsPerPage));
+  if (p < 1 || p > pages) return;
+  state.currentPage = p;
+  renderPage('lancamentos');
+}
+
+function toggleAll(cb) {
+  const lancamentos = calcularSaldos(state.lancamentos);
+  const start = (state.currentPage - 1) * state.itemsPerPage;
+  const paginated = lancamentos.slice(start, start + state.itemsPerPage);
+  if (cb.checked) paginated.forEach(l => state.selectedIds.add(l.id));
+  else paginated.forEach(l => state.selectedIds.delete(l.id));
+  renderPage('lancamentos');
+}
+
+function toggleSelect(id, cb) {
+  if (cb.checked) state.selectedIds.add(id);
+  else state.selectedIds.delete(id);
+}
+
+function editarLancamento(id) {
+  const l = state.lancamentos.find(x => x.id === id);
+  if (!l) return;
+  state.editingId = id;
+  document.getElementById('page-title').textContent = 'Editar Lançamento';
+  document.getElementById('content').innerHTML = renderForm(l);
+}
+
+function confirmarExclusao(id) {
+  const l = state.lancamentos.find(x => x.id === id);
+  abrirModal('Confirmar Exclusão',
+    `<p style="color:var(--text2);margin-bottom:12px">Tem certeza que deseja excluir este lançamento?</p>
+     <div class="validation-error"><strong>ATENÇÃO</strong><p>${l?.historico || 'Lançamento selecionado'}</p></div>`,
+    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
+     <button class="btn btn-danger" onclick="excluirLancamento('${id}')">Excluir</button>`
+  );
+}
+
+function excluirLancamento(id) {
+  state.lancamentos = state.lancamentos.filter(l => l.id !== id);
+  state.selectedIds.delete(id);
+  saveState();
+  fecharModal();
+  toast('Lançamento excluído.','info');
+  renderPage('lancamentos');
+}
+
+function excluirSelecionados() {
+  abrirModal('Excluir Selecionados',
+    `<p style="color:var(--text2)">Excluir <strong>${state.selectedIds.size}</strong> lançamentos selecionados?</p>`,
+    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
+     <button class="btn btn-danger" onclick="confirmarExcluirVarios()">Excluir Todos</button>`
+  );
+}
+
+function confirmarExcluirVarios() {
+  const ids = new Set(state.selectedIds);
+  state.lancamentos = state.lancamentos.filter(l => !ids.has(l.id));
+  state.selectedIds.clear();
+  saveState();
+  fecharModal();
+  toast(`${ids.size} lançamentos excluídos.`,'info');
+  renderPage('lancamentos');
+}
+
+// ============================================================
+// EXPORTAÇÃO LCDPR TXT
+// ============================================================
+function renderExportacao() {
+  const lancamentos = calcularSaldos(state.lancamentos);
+  const consolidado = consolidarPorMes(lancamentos);
+  const linhasQ100 = lancamentos.map(gerarLinhaQ100);
+  const linhasQ200 = consolidado.map(gerarLinhaQ200);
+  const preview = [...linhasQ100.slice(0,5), '...', ...linhasQ200].join('\n');
+
+  return `
+  <div class="form-section" style="margin-bottom:20px">
+    <div class="form-section-title">⚙️ Configurações de Exportação</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Ano Calendário</label>
+        <input type="number" class="form-control" id="exp-ano" value="${state.anoCalendario}" min="2000" max="2099" onchange="state.anoCalendario=parseInt(this.value)">
+      </div>
+      <div class="form-group">
+        <label>CPF do Produtor</label>
+        <input type="text" class="form-control" id="exp-cpf" value="${state.cpfProdutor}" placeholder="000.000.000-00" oninput="this.value=maskCpfCnpj(this.value);state.cpfProdutor=this.value">
+      </div>
+      <div class="form-group">
+        <label>Nome do Produtor</label>
+        <input type="text" class="form-control" id="exp-nome" value="${state.nomeProdutor}" placeholder="Nome completo" oninput="state.nomeProdutor=this.value">
+      </div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+    <div class="stat-card">
+      <div class="label">Registros Q100</div>
+      <div class="value blue">${lancamentos.length}</div>
+      <div class="sub">Lançamentos individuais</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Registros Q200</div>
+      <div class="value blue">${consolidado.length}</div>
+      <div class="sub">Consolidações mensais</div>
+    </div>
+  </div>
+
+  <div class="form-section" style="margin-bottom:20px">
+    <div class="form-section-title">🔍 Validação e Exportação</div>
+    <div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap">
+      <button class="btn btn-warning" onclick="validarEExibir()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        Validar LCDPR
+      </button>
+      <button class="btn btn-success" onclick="exportarTxt()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 18 15 15"/></svg>
+        Exportar TXT LCDPR
+      </button>
+    </div>
+    <div id="validacao-result"></div>
+  </div>
+
+  <div class="form-section">
+    <div class="form-section-title">👁 Preview do Arquivo TXT</div>
+    <div style="margin-bottom:12px">
+      <strong style="font-size:12px;color:var(--text3)">Q100 — Lançamentos Individuais (primeiros 5):</strong>
+    </div>
+    <div class="txt-preview">${linhasQ100.slice(0,5).join('\n')}${lancamentos.length>5?'\n... mais '+(lancamentos.length-5)+' registros ...':''}</div>
+    <div style="margin:16px 0 12px">
+      <strong style="font-size:12px;color:var(--text3)">Q200 — Consolidação Mensal:</strong>
+    </div>
+    <div class="txt-preview">${linhasQ200.join('\n') || '(nenhum dado para consolidar)'}</div>
+  </div>`;
+}
+
+function gerarLinhaQ100(lanc) {
+  const isReceita = lanc.tipoLancamento === 1;
+  const entrada = isReceita ? formatLCDPR(lanc.valor) : formatLCDPR(0);
+  const saida = (!isReceita && lanc.tipoLancamento === 2) ? formatLCDPR(lanc.valor) : formatLCDPR(0);
+  const saldo = formatLCDPR(lanc.saldoFinal || 0);
+  return ['Q100',formatDataLCDPR(lanc.data),lanc.codigoImovel,lanc.codigoConta,lanc.numeroDocumento,
+    String(lanc.tipoDocumento),lanc.historico.substring(0,200).replace(/\|/g,' '),
+    lanc.cpfCnpj.replace(/\D/g,''),String(lanc.tipoLancamento),entrada,saida,saldo,lanc.situacao].join('|');
+}
+
+function gerarLinhaQ200(c) {
+  return ['Q200',c.mesAno,formatLCDPR(c.receitas),formatLCDPR(c.despesas),formatLCDPR(c.resultado),c.tipo].join('|');
+}
+
+function validarEExibir() {
+  const erros = validarLancamentos(state.lancamentos);
+  const el = document.getElementById('validacao-result');
+  if (erros.length === 0) {
+    el.innerHTML = `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px 16px;color:#15803d;font-weight:700;display:flex;align-items:center;gap:8px">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+      LCDPR válido! Nenhum erro encontrado. Pronto para exportar.
+    </div>`;
+  } else {
+    el.innerHTML = `<div style="margin-bottom:8px;font-weight:700;color:var(--danger)">${erros.length} erro(s) encontrado(s):</div>
+      ${erros.map(e=>`<div class="validation-error">
+        <strong>${e.campo}${e.linha?' — Registro #'+e.linha:''}</strong>
+        <p>${e.mensagem}${e.sugestao?' → '+e.sugestao:''}</p>
+      </div>`).join('')}`;
+  }
+}
+
+function exportarTxt() {
+  const erros = validarLancamentos(state.lancamentos);
+  if (erros.length > 0) {
+    toast(`${erros.length} erro(s) de validação encontrado(s). Verifique antes de exportar.`,'error');
+    validarEExibir();
+    return;
+  }
+  const lancamentos = calcularSaldos(state.lancamentos);
+  const consolidado = consolidarPorMes(lancamentos);
+  const linhasQ100 = lancamentos.map(gerarLinhaQ100);
+  const linhasQ200 = consolidado.map(gerarLinhaQ200);
+  const conteudo = [...linhasQ100, ...linhasQ200].join('\r\n');
+  const blob = new Blob([conteudo], {type:'text/plain;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `LCDPR_${state.anoCalendario}.txt`; a.click();
+  URL.revokeObjectURL(url);
+  toast('Arquivo LCDPR exportado com sucesso!','success');
+}
+
+// ============================================================
+// VALIDATION ENGINE
+// ============================================================
+function validarLancamentos(lancamentos) {
+  const erros = [];
+  lancamentos.forEach((l, i) => {
+    const linha = i + 1;
+    if (!l.data) erros.push({campo:'Data',linha,mensagem:'Data obrigatória.',sugestao:'Informe a data.'});
+    if (!l.codigoImovel) erros.push({campo:'Imóvel',linha,mensagem:'Código do imóvel obrigatório.'});
+    if (!l.codigoConta) erros.push({campo:'Conta',linha,mensagem:'Código da conta obrigatório.'});
+    if (!l.historico?.trim()) erros.push({campo:'Histórico',linha,mensagem:'Histórico obrigatório.'});
+    if (!l.valor || l.valor <= 0) erros.push({campo:'Valor',linha,mensagem:'Valor deve ser maior que zero.',sugestao:'Informe um valor positivo em centavos.'});
+    const d = (l.cpfCnpj||'').replace(/\D/g,'');
+    if (d.length !== 11 && d.length !== 14) erros.push({campo:'CPF/CNPJ',linha,mensagem:'CPF (11) ou CNPJ (14 dígitos) inválido.',sugestao:'Verifique o número informado.'});
+    if (![1,2,3].includes(l.tipoLancamento)) erros.push({campo:'Tipo Lançamento',linha,mensagem:'Tipo de lançamento inválido (1, 2 ou 3).'});
+    if (![1,2,3,4,5,6].includes(l.tipoDocumento)) erros.push({campo:'Tipo Documento',linha,mensagem:'Tipo de documento inválido (1 a 6).'});
+  });
+  return erros;
+}
+
+// ============================================================
+// CONSOLIDAÇÃO (Q200)
+// ============================================================
+function renderConsolidacao() {
+  const lancamentos = calcularSaldos(state.lancamentos);
+  const consolidado = consolidarPorMes(lancamentos);
+  let saldoAcum = 0;
+  const totalRec = consolidado.reduce((a,b)=>a+b.receitas,0);
+  const totalDesp = consolidado.reduce((a,b)=>a+b.despesas,0);
+
+  return `
+  <div class="summary-bar">
+    <div class="sum-item"><div class="sl">Total Receitas</div><div class="sv" style="color:var(--success)">${formatBRL(totalRec)}</div></div>
+    <div class="sum-item"><div class="sl">Total Despesas</div><div class="sv" style="color:var(--danger)">${formatBRL(totalDesp)}</div></div>
+    <div class="sum-item"><div class="sl">Resultado</div><div class="sv" style="color:${(totalRec-totalDesp)>=0?'var(--success)':'var(--danger)'}">${formatBRL(totalRec-totalDesp)}</div></div>
+  </div>
+
+  <div class="table-card">
+    <div class="table-header">
+      <h3>Consolidação Mensal Q200 — ${consolidado.length} mês(es)</h3>
+      <div class="table-actions">
+        <button class="btn btn-success btn-sm" onclick="exportarTxt()">Exportar TXT</button>
+        <button class="btn btn-outline btn-sm" onclick="window.print()">🖨 Imprimir</button>
+      </div>
+    </div>
+    <div style="overflow-x:auto">
+    <table class="consol-table">
+      <thead><tr>
+        <th>Mês/Ano</th>
+        <th>Lançamentos</th>
+        <th>Receitas</th>
+        <th>Despesas</th>
+        <th>Resultado</th>
+        <th>Saldo Acumulado</th>
+        <th>Tipo</th>
+        <th>Linha Q200</th>
+      </tr></thead>
+      <tbody>
+        ${consolidado.length === 0 ? `<tr><td colspan="8"><div class="empty-state"><p>Nenhum dado para consolidar.</p></div></td></tr>` :
+          consolidado.map(c => {
+            saldoAcum += (c.tipo==='P' ? c.resultado : -c.resultado);
+            return `<tr>
+              <td style="font-weight:700">${mesLabel(c.mesAno.slice(0,2))}/${c.mesAno.slice(2)}</td>
+              <td style="color:var(--text3)">${c.qtdLancamentos}</td>
+              <td class="receita-val">${formatBRL(c.receitas)}</td>
+              <td class="despesa-val">${formatBRL(c.despesas)}</td>
+              <td class="${c.tipo==='P'?'receita-val':'despesa-val'}">${c.tipo==='P'?'+':'−'}${formatBRL(c.resultado)}</td>
+              <td class="${saldoAcum>=0?'saldo-pos':'saldo-neg'}">${formatBRL(saldoAcum)}</td>
+              <td><span class="tipo-${c.tipo}">${c.tipo==='P'?'✅ P':'❌ N'}</span></td>
+              <td style="font-family:monospace;font-size:10px;color:var(--text3)">Q200|${c.mesAno}|…</td>
+            </tr>`;
+          }).join('')}
+      </tbody>
+      <tfoot>
+        <tr class="tfoot-row">
+          <td colspan="2">TOTAL ANUAL</td>
+          <td class="receita-val">${formatBRL(totalRec)}</td>
+          <td class="despesa-val">${formatBRL(totalDesp)}</td>
+          <td class="${(totalRec-totalDesp)>=0?'receita-val':'despesa-val'}">${formatBRL(totalRec-totalDesp)}</td>
+          <td class="${saldoAcum>=0?'saldo-pos':'saldo-neg'}">${formatBRL(saldoAcum)}</td>
+          <td colspan="2"></td>
+        </tr>
+      </tfoot>
+    </table>
+    </div>
+  </div>`;
+}
+
+// ============================================================
+// DEMONSTRATIVO
+// ============================================================
+function renderDemonstrativo() {
+  let lancamentos = calcularSaldos(state.lancamentos);
+  const [filtroMin, filtroMax, filtroTexto, filtroTipo] = [
+    document.getElementById('dem-min')?.value || '',
+    document.getElementById('dem-max')?.value || '',
+    document.getElementById('dem-txt')?.value || '',
+    document.getElementById('dem-tipo')?.value || '',
+  ];
+
+  const conteudo = `
+  <div class="form-section" style="margin-bottom:20px">
+    <div class="form-section-title">🔍 Filtros do Demonstrativo</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Período — De</label>
+        <input type="date" class="form-control" id="dem-de" onchange="renderPage('demonstrativo')">
+      </div>
+      <div class="form-group">
+        <label>Período — Até</label>
+        <input type="date" class="form-control" id="dem-ate" onchange="renderPage('demonstrativo')">
+      </div>
+      <div class="form-group">
+        <label>Tipo</label>
+        <select class="form-control" id="dem-tipo" onchange="renderPage('demonstrativo')">
+          <option value="">Todos</option>
+          <option value="1">Receita</option>
+          <option value="2">Despesa</option>
+          <option value="3">Adiantamento</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Busca Livre</label>
+        <input type="text" class="form-control" id="dem-txt" placeholder="Histórico, CPF..." oninput="renderPage('demonstrativo')">
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap">
+      <button class="btn btn-outline btn-sm" onclick="window.print()">🖨 Imprimir</button>
+      <button class="btn btn-success btn-sm" onclick="exportarCSV()">📊 Exportar CSV</button>
+    </div>
+  </div>`;
+
+  if (filtroTipo) lancamentos = lancamentos.filter(l => l.tipoLancamento == filtroTipo);
+
+  const totalRec = lancamentos.filter(l=>l.tipoLancamento===1).reduce((a,b)=>a+b.valor,0);
+  const totalDesp = lancamentos.filter(l=>l.tipoLancamento===2).reduce((a,b)=>a+b.valor,0);
+
+  return conteudo + `
+  <div class="table-card">
+    <div class="table-header">
+      <h3>Demonstrativo de Lançamentos — ${lancamentos.length} registro(s)</h3>
+    </div>
+    <div style="overflow-x:auto">
+    <table class="report-table">
+      <thead><tr>
+        <th>#</th><th>Data</th><th>Documento</th><th>Histórico</th>
+        <th>CPF/CNPJ</th><th>Conta</th><th>Imóvel</th>
+        <th>Receita</th><th>Despesa</th><th>Saldo</th><th>Tipo</th>
+      </tr></thead>
+      <tbody>
+        ${lancamentos.map((l,i) => `<tr>
+          <td style="color:var(--text3);font-size:11px">${i+1}</td>
+          <td style="white-space:nowrap">${formatDate(l.data)}</td>
+          <td style="font-size:11px">${l.numeroDocumento}</td>
+          <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${l.historico}</td>
+          <td style="font-size:11px">${l.cpfCnpj}</td>
+          <td style="font-size:11px">${l.codigoConta}</td>
+          <td style="font-size:11px;font-weight:700;color:var(--primary)">${l.codigoImovel}</td>
+          <td class="${l.tipoLancamento===1?'receita-val':''}">${l.tipoLancamento===1?formatBRL(l.valor):'—'}</td>
+          <td class="${l.tipoLancamento===2?'despesa-val':''}">${l.tipoLancamento===2?formatBRL(l.valor):'—'}</td>
+          <td class="${l.saldoFinal>=0?'saldo-pos':'saldo-neg'}">${formatBRL(l.saldoFinal)}</td>
+          <td><span class="badge ${l.tipoLancamento===1?'badge-receita':l.tipoLancamento===2?'badge-despesa':'badge-adiantamento'}">${tipoLanctoLabel(l.tipoLancamento)}</span></td>
+        </tr>`).join('')}
+      </tbody>
+      <tfoot>
+        <tr class="tfoot-row">
+          <td colspan="7">TOTAIS</td>
+          <td class="receita-val">${formatBRL(totalRec)}</td>
+          <td class="despesa-val">${formatBRL(totalDesp)}</td>
+          <td class="${(totalRec-totalDesp)>=0?'saldo-pos':'saldo-neg'}">${formatBRL(totalRec-totalDesp)}</td>
+          <td></td>
+        </tr>
+      </tfoot>
+    </table>
+    </div>
+  </div>`;
+}
+
+function exportarCSV() {
+  const lancamentos = calcularSaldos(state.lancamentos);
+  const header = 'Data;Imóvel;Conta;Documento;Tipo Doc;Histórico;CPF/CNPJ;Tipo Lançamento;Valor;Saldo;Situação';
+  const rows = lancamentos.map(l => [
+    formatDate(l.data), l.codigoImovel, l.codigoConta, l.numeroDocumento,
+    tipoDocLabel(l.tipoDocumento), `"${l.historico}"`, l.cpfCnpj,
+    tipoLanctoLabel(l.tipoLancamento), formatBRL(l.valor), formatBRL(l.saldoFinal), l.situacao
+  ].join(';'));
+  const csv = [header, ...rows].join('\n');
+  const blob = new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'LCDPR_Demonstrativo.csv'; a.click();
+  URL.revokeObjectURL(url);
+  toast('CSV exportado!','success');
+}
+
+// ============================================================
+// CONFIG
+// ============================================================
+function renderConfig() {
+  return `
+  <div class="form-section" style="max-width:680px">
+    <div class="form-section-title">⚙️ Dados do Produtor Rural</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Nome do Produtor</label>
+        <input type="text" class="form-control" id="cfg-nome" value="${state.nomeProdutor}" placeholder="Nome completo">
+      </div>
+      <div class="form-group">
+        <label>CPF do Produtor</label>
+        <input type="text" class="form-control" id="cfg-cpf" value="${state.cpfProdutor}" placeholder="000.000.000-00" oninput="this.value=maskCpfCnpj(this.value)">
+      </div>
+      <div class="form-group">
+        <label>Ano Calendário</label>
+        <input type="number" class="form-control" id="cfg-ano" value="${state.anoCalendario}" min="2000" max="2099">
+      </div>
+    </div>
+    <div style="margin-top:16px">
+      <button class="btn btn-primary" onclick="salvarConfig()">Salvar Configurações</button>
+    </div>
+  </div>
+
+  <div class="form-section" style="max-width:680px;margin-top:20px">
+    <div class="form-section-title">🏡 Imóveis Rurais Cadastrados</div>
+    <table style="width:100%;font-size:13px;margin-bottom:16px">
+      <thead><tr><th>Código</th><th>Descrição</th><th>Município</th><th>UF</th></tr></thead>
+      <tbody>${state.imoveis.map(i=>`<tr><td><strong>${i.codigo}</strong></td><td>${i.descricao}</td><td>${i.municipio}</td><td>${i.uf}</td></tr>`).join('')}</tbody>
+    </table>
+  </div>
+
+  <div class="form-section" style="max-width:680px;margin-top:20px;border:1px solid #fecaca;background:#fef2f2">
+    <div class="form-section-title" style="color:var(--danger)">⚠️ Zona de Perigo</div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:16px">As ações abaixo são irreversíveis. Exporte seus dados antes de prosseguir.</p>
+    <button class="btn btn-danger" onclick="confirmarLimparTudo()">🗑 Apagar Todos os Lançamentos</button>
+  </div>`;
+}
+
+function salvarConfig() {
+  state.nomeProdutor = document.getElementById('cfg-nome').value;
+  state.cpfProdutor = document.getElementById('cfg-cpf').value;
+  state.anoCalendario = parseInt(document.getElementById('cfg-ano').value);
+  document.getElementById('ano-badge').textContent = 'Ano: ' + state.anoCalendario;
+  saveState();
+  toast('Configurações salvas!','success');
+}
+
+function confirmarLimparTudo() {
+  abrirModal('Apagar Tudo',
+    '<div class="validation-error"><strong>ATENÇÃO IRREVERSÍVEL</strong><p>Todos os lançamentos serão permanentemente deletados. Esta ação não pode ser desfeita.</p></div>',
+    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
+     <button class="btn btn-danger" onclick="limparTudo()">Confirmar Exclusão</button>`
+  );
+}
+
+function limparTudo() {
+  state.lancamentos = [];
+  state.selectedIds.clear();
+  saveState();
+  fecharModal();
+  toast('Todos os lançamentos foram apagados.','info');
+  navigate('dashboard');
+}
+
+// ============================================================
+// MODAL
+// ============================================================
+function abrirModal(titulo, corpo, rodape) {
+  document.getElementById('modal-title').textContent = titulo;
+  document.getElementById('modal-body').innerHTML = corpo;
+  document.getElementById('modal-footer').innerHTML = rodape;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function fecharModal(e) {
+  if (e && e.target !== document.getElementById('modal-overlay')) return;
+  document.getElementById('modal-overlay').classList.remove('open');
+}
+
+// ============================================================
+// TOAST
+// ============================================================
+function toast(msg, tipo='info') {
+  const el = document.createElement('div');
+  el.className = `toast ${tipo}`;
+  const icons = {success:'✅',error:'❌',info:'ℹ️',warning:'⚠️'};
+  el.innerHTML = `<span>${icons[tipo]||'ℹ️'}</span> ${msg}`;
+  const container = document.getElementById('toast-container');
+  container.appendChild(el);
+  setTimeout(()=>{el.style.opacity='0';el.style.transform='translateX(40px)';el.style.transition='all .3s';setTimeout(()=>el.remove(),300)}, 3000);
+}
+
+// ============================================================
+// INIT
+// ============================================================
+loadState();
+navigate('dashboard');
+</script>
+</body>
+</html>
