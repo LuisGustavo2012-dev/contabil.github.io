@@ -149,23 +149,8 @@ select.form-control{cursor:pointer}
 .toast.info{border-left:4px solid var(--primary);color:var(--primary)}
 @keyframes slideIn{from{transform:translateX(40px);opacity:0}to{transform:translateX(0);opacity:1}}
 
-/* VALIDATION */
-.validation-error{background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px 16px;margin-bottom:8px}
-.validation-error strong{color:var(--danger);font-size:12px}
-.validation-error p{color:#7f1d1d;font-size:12px;margin-top:2px}
-
 /* TXT PREVIEW */
 .txt-preview{background:#0f2137;color:#a8d8ea;font-family:'Courier New',monospace;font-size:11px;padding:16px;border-radius:8px;overflow-x:auto;white-space:pre;max-height:300px;overflow-y:auto}
-
-/* REPORT TABLE */
-.report-table th{font-size:11px}
-.report-table td{font-size:12px}
-
-/* EMPTY STATE */
-.empty-state{text-align:center;padding:60px 20px;color:var(--text3)}
-.empty-state svg{width:48px;height:48px;margin:0 auto 12px;opacity:.3}
-.empty-state h3{font-size:16px;font-weight:700;margin-bottom:6px;color:var(--text2)}
-.empty-state p{font-size:13px}
 
 /* CONSOLIDATION */
 .consol-table{width:100%;border-collapse:collapse;font-size:13px}
@@ -178,21 +163,6 @@ select.form-control{cursor:pointer}
 /* RESPONSIVE */
 @media(max-width:900px){#sidebar{transform:translateX(-240px)}.sidebar-open #sidebar{transform:translateX(0)}#main{margin-left:0}.charts-row{grid-template-columns:1fr}}
 @media print{#sidebar,#topbar,.btn,#toast-container{display:none!important}#main{margin:0}#content{padding:0}}
-
-/* CHECKBOX */
-input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--primary)}
-
-/* TABS */
-.tabs{display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:24px}
-.tab-btn{padding:10px 20px;font-size:13px;font-weight:700;color:var(--text3);cursor:pointer;border:none;background:none;border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .15s}
-.tab-btn.active{color:var(--primary);border-bottom-color:var(--primary)}
-.tab-btn:hover{color:var(--primary)}
-
-/* SUMMARY ROW */
-.summary-bar{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
-.sum-item{background:var(--card);border-radius:8px;padding:14px;border:1px solid var(--border);text-align:center}
-.sum-item .sl{font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px}
-.sum-item .sv{font-size:18px;font-weight:800}
 </style>
 </head>
 <body>
@@ -273,9 +243,9 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--pr
 // ============================================================
 // CONFIGURAÇÃO SUPABASE
 // ============================================================
-const supabaseUrl = 'https://vpkhkamjhajufaacnupm.supabase.co' 
-const supabaseKey = process.env.SUPABASE_KEY​​​​
-const supabase = createClient ( supabaseUrl , supabaseKey )
+const SUPABASE_URL = 'https://seu-projeto.supabase.co'; // <--- Altere para a sua URL do Supabase
+const SUPABASE_KEY = 'sua-chave-anon-public';         // <--- Altere para a sua chave pública anónima do Supabase
+const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ============================================================
 // STATE & CONFIG
@@ -303,12 +273,9 @@ let state = {
   filterImovel: '',
   filterSearch: '',
   sortCol: 'data',
-  sortDir: 'asc',
-  selectedIds: new Set(),
+  sortDir: 'asc'
 };
 
-// Modificado: O Estado Geral (Produtor/Configurações) continua no LocalStorage para conveniência rápida,
-// mas a tabela centralizada de lançamentos foi transferida inteiramente para o Supabase.
 function saveState() {
   const settingsToSave = {
     cpfProdutor: state.cpfProdutor,
@@ -318,7 +285,6 @@ function saveState() {
   localStorage.setItem('lcdpr_settings', JSON.stringify(settingsToSave));
 }
 
-// Alterado para Assíncrono para buscar os lançamentos do Supabase
 async function loadState() {
   try {
     const rawSettings = localStorage.getItem('lcdpr_settings');
@@ -330,7 +296,6 @@ async function loadState() {
 
   document.getElementById('ano-badge').textContent = `Ano: ${state.anoCalendario}`;
 
-  // Buscar lançamentos da tabela 'lancamentos' no Supabase
   try {
     const { data, error } = await supabase
       .from('lancamentos')
@@ -342,11 +307,10 @@ async function loadState() {
     if (data && data.length > 0) {
       state.lancamentos = data;
     } else {
-      // Se a tabela estiver vazia, injeta os dados iniciais
       await seedDataSupabase();
     }
   } catch (error) {
-    console.error('Erro ao conectar com o Supabase, carregando local provisório:', error);
+    console.error('Erro ao conectar com o Supabase:', error);
     toast('Erro de ligação ao Supabase!', 'error');
   }
   
@@ -401,10 +365,13 @@ function formatMesAnoLCDPR(iso) {
   return `${m}${y}`;
 }
 
-function maskCpfCnpj(v) {
-  const d = v.replace(/\D/g,'');
-  if (d.length <= 11) return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/,'$1.$2.$3-$4');
-  return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/,'$1.$2.$3/$4-$5');
+function tipoLanctoLabel(t) {
+  return {1:'Receita',2:'Despesa',3:'Adiantamento'}[t] || '';
+}
+
+function mesLabel(mm) {
+  const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  return meses[parseInt(mm)-1] || mm;
 }
 
 function parseBRL(v) {
@@ -415,23 +382,11 @@ function formatInputBRL(centavos) {
   return (centavos/100).toFixed(2).replace('.',',');
 }
 
-function tipoLanctoLabel(t) {
-  return {1:'Receita',2:'Despesa',3:'Adiantamento'}[t] || '';
-}
-
-function mesLabel(mm) {
-  const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-  return meses[parseInt(mm)-1] || mm;
-}
-
 // ============================================================
 // CALCULATORS
 // ============================================================
 function calcularSaldos(lancamentos) {
-  const sorted = [...lancamentos].sort((a,b) => {
-    const da = new Date(a.data).getTime(), db = new Date(b.data).getTime();
-    return da !== db ? da - db : a.createdAt.localeCompare(b.createdAt);
-  });
+  const sorted = [...lancamentos].sort((a,b) => new Date(a.data).getTime() - new Date(b.data).getTime());
   let saldo = 0;
   return sorted.map(l => {
     if (l.tipoLancamento === 1) saldo += l.valor;
@@ -469,27 +424,26 @@ function getStats() {
   }
   const saldoAtual = lancamentos.length ? lancamentos[lancamentos.length-1].saldoFinal : 0;
   const consolidado = consolidarPorMes(lancamentos);
-  const mesesPos = consolidado.filter(m => m.tipo === 'P').length;
-  const mesesNeg = consolidado.filter(m => m.tipo === 'N').length;
-  return {totalReceitas, totalDespesas, saldoAtual, mesesPos, mesesNeg, totalLancamentos: lancamentos.length, lancamentos, consolidado};
+  return {totalReceitas, totalDespesas, saldoAtual, totalLancamentos: lancamentos.length, lancamentos, consolidado};
 }
 
 // ============================================================
-// NAVIGATION
+// NAVIGATION & PAGE ROTATION
 // ============================================================
-let currentPage = 'dashboard';
+let activePage = 'dashboard';
 
 function navigate(page) {
-  currentPage = page;
+  activePage = page;
   document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active'));
-  const map = {dashboard:0,novo:1,lancamentos:2,exportacao:3,consolidacao:4,demonstrativo:5,config:6};
+  
+  const menuMap = {dashboard:0, novo:1, lancamentos:2, exportacao:3, consolidacao:4, demonstrativo:5, config:6};
   const items = document.querySelectorAll('.menu-item');
-  if (items[map[page]]) items[map[page]].classList.add('active');
+  if (items[menuMap[page]]) items[menuMap[page]].classList.add('active');
 
   const titles = {
-    dashboard:'Dashboard',novo:'Novo Lançamento',lancamentos:'Todos os Lançamentos',
-    exportacao:'Exportar LCDPR TXT',consolidacao:'Consolidação Mensal (Q200)',
-    demonstrativo:'Demonstrativo de Lançamentos',config:'Configurações'
+    dashboard:'Dashboard', novo:'Novo Lançamento', lancamentos:'Todos os Lançamentos',
+    exportacao:'Exportar LCDPR TXT', consolidacao:'Consolidação Mensal (Q200)',
+    demonstrativo:'Demonstrativo de Lançamentos', config:'Configurações'
   };
   document.getElementById('page-title').textContent = titles[page] || page;
   if(page !== 'novo') state.editingId = null;
@@ -502,80 +456,36 @@ function renderPage(page) {
     case 'dashboard': el.innerHTML = renderDashboard(); initCharts(); break;
     case 'novo': el.innerHTML = renderForm(); break;
     case 'lancamentos': el.innerHTML = renderLancamentos(); break;
+    case 'exportacao': el.innerHTML = renderExportacao(); break;
+    case 'consolidacao': el.innerHTML = renderConsolidacao(); break;
+    case 'demonstrativo': el.innerHTML = renderDemonstrativo(); break;
     case 'config': el.innerHTML = renderConfig(); break;
-    default: el.innerHTML = `<div class="empty-state"><h3>Módulo em Exibição</h3><p>Dados sincronizados com o Supabase.</p></div>`; break;
   }
 }
 
 // ============================================================
-// DASHBOARD VIEW
+// VIEWS PARTS
 // ============================================================
 function renderDashboard() {
-  const {totalReceitas, totalDespesas, saldoAtual, mesesPos, mesesNeg, totalLancamentos, lancamentos} = getStats();
-  const ultimos = [...lancamentos].reverse().slice(0,6);
+  const {totalReceitas, totalDespesas, saldoAtual, totalLancamentos, lancamentos} = getStats();
+  const ultimos = [...lancamentos].reverse().slice(0,5);
 
   return `
   <div class="cards-grid">
-    <div class="stat-card green">
-      <div class="label">Total Receitas</div>
-      <div class="value">${formatBRL(totalReceitas)}</div>
-      <div class="sub">Todas as entradas</div>
-    </div>
-    <div class="stat-card red">
-      <div class="label">Total Despesas</div>
-      <div class="value">${formatBRL(totalDespesas)}</div>
-      <div class="sub">Todos os gastos</div>
-    </div>
-    <div class="stat-card ${saldoAtual >= 0 ? 'green' : 'red'}">
-      <div class="label">Saldo Atual</div>
-      <div class="value">${formatBRL(saldoAtual)}</div>
-      <div class="sub">${saldoAtual >= 0 ? '▲ Positivo' : '▼ Negativo'}</div>
-    </div>
-    <div class="stat-card blue">
-      <div class="label">Lançamentos</div>
-      <div class="value">${totalLancamentos}</div>
-      <div class="sub">Registros totais</div>
-    </div>
+    <div class="stat-card green"><div class="label">Total Receitas</div><div class="value">${formatBRL(totalReceitas)}</div></div>
+    <div class="stat-card red"><div class="label">Total Despesas</div><div class="value">${formatBRL(totalDespesas)}</div></div>
+    <div class="stat-card ${saldoAtual >= 0 ? 'green':'red'}"><div class="label">Saldo Atual</div><div class="value">${formatBRL(saldoAtual)}</div></div>
+    <div class="stat-card blue"><div class="label">Lançamentos</div><div class="value">${totalLancamentos}</div></div>
   </div>
   <div class="charts-row">
-    <div class="chart-card">
-      <h3>Evolução Mensal — Receitas vs Despesas</h3>
-      <div class="chart-wrap"><canvas id="chartBar"></canvas></div>
-    </div>
-    <div class="chart-card">
-      <h3>Distribuição por Tipo</h3>
-      <div class="chart-wrap"><canvas id="chartPie"></canvas></div>
-    </div>
-  </div>
-  <div class="table-card">
-    <div class="table-header">
-      <h3>Últimos Lançamentos (Supabase)</h3>
-      <button class="btn btn-outline btn-sm" onclick="navigate('lancamentos')">Ver todos →</button>
-    </div>
-    <table style="width:100%">
-      <thead>
-        <tr><th>Data</th><th>Imóvel</th><th>Histórico</th><th>Tipo</th><th>Valor</th></tr>
-      </thead>
-      <tbody>
-        ${ultimos.map(l => `
-          <tr>
-            <td>${formatDate(l.data)}</td>
-            <td>${l.codigoImovel}</td>
-            <td>${l.historico}</td>
-            <td><span class="badge ${l.tipoLancamento===1?'badge-receita':'badge-despesa'}">${tipoLanctoLabel(l.tipoLancamento)}</span></td>
-            <td class="${l.tipoLancamento===1?'receita-val':'despesa-val'}">${formatBRL(l.valor)}</td>
-          </tr>
-        `).join('')}
-      </tbody>
-    </table>
+    <div class="chart-card"><h3>Evolução Mensal</h3><div class="chart-wrap"><canvas id="chartBar"></canvas></div></div>
+    <div class="chart-card"><h3>Distribuição</h3><div class="chart-wrap"><canvas id="chartPie"></canvas></div></div>
   </div>`;
 }
 
 function initCharts() {
-  const {consolidado} = getStats();
+  const {consolidado, totalReceitas, totalDespesas} = getStats();
   const labels = consolidado.map(c => mesLabel(c.mesAno.slice(0,2))+'/'+c.mesAno.slice(2));
-  const rec = consolidado.map(c => c.receitas/100);
-  const desp = consolidado.map(c => c.despesas/100);
   
   const barCtx = document.getElementById('chartBar');
   if (barCtx) {
@@ -584,29 +494,35 @@ function initCharts() {
       data:{
         labels: labels,
         datasets:[
-          {label:'Receitas',data:rec,backgroundColor:'rgba(22,163,74,0.7)'},
-          {label:'Despesas',data:desp,backgroundColor:'rgba(220,38,38,0.7)'}
+          {label:'Receitas', data: consolidado.map(c=>c.receitas/100), backgroundColor:'rgba(22,163,74,0.7)'},
+          {label:'Despesas', data: consolidado.map(c=>c.despesas/100), backgroundColor:'rgba(220,38,38,0.7)'}
         ]
+      },
+      options:{responsive:true,maintainAspectRatio:false}
+    });
+  }
+
+  const pieCtx = document.getElementById('chartPie');
+  if (pieCtx) {
+    new Chart(pieCtx, {
+      type:'pie',
+      data:{
+        labels:['Receitas','Despesas'],
+        datasets:[{data:[totalReceitas/100, totalDespesas/100], backgroundColor:['#16a34a','#dc2626']}]
       },
       options:{responsive:true,maintainAspectRatio:false}
     });
   }
 }
 
-// ============================================================
-// FORM VIEW & SUPABASE ACTIONS
-// ============================================================
 function renderForm() {
   const l = state.lancamentos.find(item => item.id === state.editingId) || {};
   return `
   <form id="lancamento-form" onsubmit="salvarLancamento(event)">
     <div class="form-section">
-      <div class="form-section-title">${state.editingId ? '✏️ Editar Lançamento' : '➕ Novo Lançamento (Q100)'}</div>
+      <div class="form-section-title">${state.editingId ? '✏️ Editar Lançamento' : '➕ Novo Lançamento'}</div>
       <div class="form-grid">
-        <div class="form-group">
-          <label>Data *</label>
-          <input type="date" class="form-control" id="f-data" value="${l.data||new Date().toISOString().slice(0,10)}" required>
-        </div>
+        <div class="form-group"><label>Data *</label><input type="date" class="form-control" id="f-data" value="${l.data||new Date().toISOString().slice(0,10)}" required></div>
         <div class="form-group">
           <label>Imóvel Rural *</label>
           <select class="form-control" id="f-imovel" required>
@@ -619,25 +535,16 @@ function renderForm() {
             ${state.contas.map(c=>`<option value="${c.codigo}" ${l.codigoConta===c.codigo?'selected':''}>${c.descricao}</option>`).join('')}
           </select>
         </div>
+        <div class="form-group"><label>Histórico *</label><input type="text" class="form-control" id="f-historico" value="${l.historico||''}" required></div>
+        <div class="form-group"><label>CPF/CNPJ</label><input type="text" class="form-control" id="f-cpfCnpj" value="${l.cpfCnpj||''}"></div>
         <div class="form-group">
-          <label>Histórico *</label>
-          <input type="text" class="form-control" id="f-historico" value="${l.historico||''}" required>
-        </div>
-        <div class="form-group">
-          <label>CPF/CNPJ Participante</label>
-          <input type="text" class="form-control" id="f-cpfCnpj" value="${l.cpfCnpj||''}">
-        </div>
-        <div class="form-group">
-          <label>Tipo Lançamento *</label>
+          <label>Tipo *</label>
           <select class="form-control" id="f-tipo" required>
             <option value="1" ${l.tipoLancamento===1?'selected':''}>Receita</option>
             <option value="2" ${l.tipoLancamento===2?'selected':''}>Despesa</option>
           </select>
         </div>
-        <div class="form-group">
-          <label>Valor (R$) *</label>
-          <input type="text" class="form-control" id="f-valor" value="${l.valor ? formatInputBRL(l.valor) : '0,00'}" required>
-        </div>
+        <div class="form-group"><label>Valor (R$) *</label><input type="text" class="form-control" id="f-valor" value="${l.valor ? formatInputBRL(l.valor) : '0,00'}" required></div>
       </div>
       <div style="margin-top:20px; display:flex; gap:10px;">
         <button type="submit" class="btn btn-success">Salvar no Supabase</button>
@@ -647,10 +554,8 @@ function renderForm() {
   </form>`;
 }
 
-// Alterado para persistir diretamente no Banco de Dados
 async function salvarLancamento(e) {
   e.preventDefault();
-  
   const payload = {
     data: document.getElementById('f-data').value,
     codigoImovel: document.getElementById('f-imovel').value,
@@ -667,52 +572,35 @@ async function salvarLancamento(e) {
 
   try {
     if (state.editingId) {
-      // UPDATE no Supabase
-      const { error } = await supabase
-        .from('lancamentos')
-        .update(payload)
-        .eq('id', state.editingId);
-
+      const { error } = await supabase.from('lancamentos').update(payload).eq('id', state.editingId);
       if (error) throw error;
       toast('Lançamento atualizado no Supabase!', 'success');
     } else {
-      // INSERT no Supabase
       payload.createdAt = new Date().toISOString();
-      const { error } = await supabase
-        .from('lancamentos')
-        .insert([payload]);
-
+      const { error } = await supabase.from('lancamentos').insert([payload]);
       if (error) throw error;
       toast('Lançamento guardado no Supabase!', 'success');
     }
   } catch (error) {
     console.error(error);
-    toast('Erro ao persistir dados.', 'error');
+    toast('Erro ao guardar dados.', 'error');
   }
-
   state.editingId = null;
-  await loadState(); // Recarrega os dados atualizados da Nuvem
+  await loadState();
 }
 
-// ============================================================
-// LIST VIEW & DELETE ACTION
-// ============================================================
 function renderLancamentos() {
   return `
   <div class="table-card">
-    <div class="table-header">
-      <h3>Todos os Lançamentos Activos</h3>
-    </div>
+    <div class="table-header"><h3>Todos os Lançamentos Activos (Supabase)</h3></div>
     <table style="width:100%">
-      <thead>
-        <tr><th>Data</th><th>Histórico</th><th>Tipo</th><th>Valor</th><th>Ações</th></tr>
-      </thead>
+      <thead><tr><th>Data</th><th>Histórico</th><th>Tipo</th><th>Valor</th><th>Ações</th></tr></thead>
       <tbody>
         ${state.lancamentos.map(l => `
           <tr>
             <td>${formatDate(l.data)}</td>
             <td>${l.historico}</td>
-            <td>${tipoLanctoLabel(l.tipoLancamento)}</td>
+            <td><span class="badge ${l.tipoLancamento===1?'badge-receita':'badge-despesa'}">${tipoLanctoLabel(l.tipoLancamento)}</span></td>
             <td class="${l.tipoLancamento===1?'receita-val':'despesa-val'}">${formatBRL(l.valor)}</td>
             <td>
               <button class="btn btn-outline btn-sm" onclick="editarReg('${l.id}')">Editar</button>
@@ -732,34 +620,70 @@ function editarReg(id) {
 
 async function deletarReg(id) {
   if (!confirm('Deseja mesmo excluir este registro do Supabase?')) return;
-  
   try {
-    const { error } = await supabase
-      .from('lancamentos')
-      .delete()
-      .eq('id', id);
-
+    const { error } = await supabase.from('lancamentos').delete().eq('id', id);
     if (error) throw error;
     toast('Removido com sucesso!', 'success');
     await loadState();
   } catch (error) {
     console.error(error);
-    toast('Erro ao deletar do Supabase.', 'error');
+    toast('Erro ao deletar.', 'error');
   }
 }
 
-// ============================================================
-// CONFIG VIEW
-// ============================================================
+function renderExportacao() {
+  return `<div class="empty-state"><h3>Módulo de Exportação</h3><p>Pronto para gerar arquivos baseados nos dados do Supabase.</p></div>`;
+}
+
+function renderConsolidacao() {
+  const {consolidado} = getStats();
+  return `
+  <div class="table-card">
+    <div class="table-header"><h3>Resumo de Consolidação Mensal</h3></div>
+    <table class="consol-table">
+      <thead><tr><th>Mês/Ano</th><th>Receitas</th><th>Despesas</th><th>Resultado</th><th>Tipo</th></tr></thead>
+      <tbody>
+        ${consolidado.map(c => `
+          <tr>
+            <td>${c.mesAno.slice(0,2)}/${c.mesAno.slice(2)}</td>
+            <td class="receita-val">${formatBRL(c.receitas)}</td>
+            <td class="despesa-val">${formatBRL(c.despesas)}</td>
+            <td>${formatBRL(c.resultado)}</td>
+            <td class="tipo-${c.tipo}">${c.tipo === 'P' ? 'LUCRO' : 'PREJUÍZO'}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+function renderDemonstrativo() {
+  const {lancamentos} = getStats();
+  return `
+  <div class="table-card">
+    <table style="width:100%">
+      <thead><tr><th>Data</th><th>Conta</th><th>Histórico</th><th>Entradas</th><th>Saídas</th><th>Saldo</th></tr></thead>
+      <tbody>
+        ${lancamentos.map(l => `
+          <tr>
+            <td>${formatDate(l.data)}</td>
+            <td>${l.codigoConta}</td>
+            <td>${l.historico}</td>
+            <td class="receita-val">${l.tipoLancamento===1?formatBRL(l.valor):'-'}</td>
+            <td class="despesa-val">${l.tipoLancamento===2?formatBRL(l.valor):'-'}</td>
+            <td class="${l.saldoFinal>=0?'saldo-pos':'saldo-neg'}">${formatBRL(l.saldoFinal)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  </div>`;
+}
+
 function renderConfig() {
   return `
   <div class="form-section">
     <div class="form-section-title">Configurações do Produtor</div>
-    <div class="form-group">
-      <label>Nome do Produtor</label>
-      <input type="text" class="form-control" id="c-nome" value="${state.nomeProdutor}">
-    </div>
-    <br>
+    <div class="form-group"><label>Nome do Produtor</label><input type="text" class="form-control" id="c-nome" value="${state.nomeProdutor||''}"></div><br>
     <button class="btn btn-primary" onclick="salvarConfig()">Salvar Configurações</button>
   </div>`;
 }
@@ -771,14 +695,23 @@ function salvarConfig() {
 }
 
 // ============================================================
-// TOAST & MODAL SYSTEM
+// TOAST ANIMADO ORIGINAL CORRIGIDO
 // ============================================================
 function toast(msg, tipo='info') {
   const el = document.createElement('div');
   el.className = `toast ${tipo}`;
-  el.textContent = msg;
-  document.getElementById('toast-container').appendChild(el);
-  setTimeout(() => el.remove(), 3000);
+  const icons = {success:'✅', error:'❌', info:'ℹ️', warning:'⚠️'};
+  el.innerHTML = `<span>${icons[tipo]||'ℹ️'}</span> ${msg}`;
+  const container = document.getElementById('toast-container');
+  if(container) {
+    container.appendChild(el);
+    setTimeout(()=>{
+      el.style.opacity='0';
+      el.style.transform='translateX(40px)';
+      el.style.transition='all .3s';
+      setTimeout(()=>el.remove(), 300);
+    }, 3000);
+  }
 }
 
 function fecharModal() {
