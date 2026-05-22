@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>LCDPR Digital — Livro Caixa Digital do Produtor Rural</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root {
   --bg: #f0f4f8;
@@ -74,8 +73,8 @@ a{color:var(--primary);text-decoration:none}
 .table-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);border:1px solid var(--border);overflow:hidden}
 .table-header{padding:16px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)}
 .table-header h3{font-size:14px;font-weight:700}
-.table-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.search-box{display:flex;align-items:center;gap:6px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;padding:6px 10px}
+.table-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding: 12px 20px; background: #fafcff; border-bottom: 1px solid var(--border)}
+.search-box{display:flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--border);border-radius:6px;padding:6px 10px}
 .search-box input{border:none;background:none;font-size:13px;color:var(--text);width:160px;outline:none}
 table{width:100%;border-collapse:collapse;font-size:13px}
 th{background:#f8fafc;color:var(--text3);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.6px;padding:10px 12px;text-align:left;border-bottom:1px solid var(--border);cursor:pointer;user-select:none;white-space:nowrap}
@@ -149,8 +148,23 @@ select.form-control{cursor:pointer}
 .toast.info{border-left:4px solid var(--primary);color:var(--primary)}
 @keyframes slideIn{from{transform:translateX(40px);opacity:0}to{transform:translateX(0);opacity:1}}
 
+/* VALIDATION */
+.validation-error{background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px 16px;margin-bottom:8px}
+.validation-error strong{color:var(--danger);font-size:12px}
+.validation-error p{color:#7f1d1d;font-size:12px;margin-top:2px}
+
 /* TXT PREVIEW */
 .txt-preview{background:#0f2137;color:#a8d8ea;font-family:'Courier New',monospace;font-size:11px;padding:16px;border-radius:8px;overflow-x:auto;white-space:pre;max-height:300px;overflow-y:auto}
+
+/* REPORT TABLE */
+.report-table th{font-size:11px}
+.report-table td{font-size:12px}
+
+/* EMPTY STATE */
+.empty-state{text-align:center;padding:60px 20px;color:var(--text3)}
+.empty-state svg{width:48px;height:48px;margin:0 auto 12px;opacity:.3}
+.empty-state h3{font-size:16px;font-weight:700;margin-bottom:6px;color:var(--text2)}
+.empty-state p{font-size:13px}
 
 /* CONSOLIDATION */
 .consol-table{width:100%;border-collapse:collapse;font-size:13px}
@@ -163,6 +177,21 @@ select.form-control{cursor:pointer}
 /* RESPONSIVE */
 @media(max-width:900px){#sidebar{transform:translateX(-240px)}.sidebar-open #sidebar{transform:translateX(0)}#main{margin-left:0}.charts-row{grid-template-columns:1fr}}
 @media print{#sidebar,#topbar,.btn,#toast-container{display:none!important}#main{margin:0}#content{padding:0}}
+
+/* CHECKBOX */
+input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--primary)}
+
+/* TABS */
+.tabs{display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:24px}
+.tab-btn{padding:10px 20px;font-size:13px;font-weight:700;color:var(--text3);cursor:pointer;border:none;background:none;border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .15s}
+.tab-btn.active{color:var(--primary);border-bottom-color:var(--primary)}
+.tab-btn:hover{color:var(--primary)}
+
+/* SUMMARY ROW */
+.summary-bar{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
+.sum-item{background:var(--card);border-radius:8px;padding:14px;border:1px solid var(--border);text-align:center}
+.sum-item .sl{font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px}
+.sum-item .sv{font-size:18px;font-weight:800}
 </style>
 </head>
 <body>
@@ -241,15 +270,10 @@ select.form-control{cursor:pointer}
 
 <script>
 // ============================================================
-// CONFIGURAÇÃO SUPABASE
+// STATE & PERSISTENCE
 // ============================================================
-const SUPABASE_URL = 'https://seu-projeto.supabase.co'; // <--- Altere para a sua URL do Supabase
-const SUPABASE_KEY = 'sua-chave-anon-public';         // <--- Altere para a sua chave pública anónima do Supabase
-const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const STORAGE_KEY = 'lcdpr_data_v2';
 
-// ============================================================
-// STATE & CONFIG
-// ============================================================
 let state = {
   lancamentos: [],
   imoveis: [
@@ -273,51 +297,27 @@ let state = {
   filterImovel: '',
   filterSearch: '',
   sortCol: 'data',
-  sortDir: 'asc'
+  sortDir: 'asc',
+  selectedIds: new Set(),
 };
 
 function saveState() {
-  const settingsToSave = {
-    cpfProdutor: state.cpfProdutor,
-    nomeProdutor: state.nomeProdutor,
-    anoCalendario: state.anoCalendario
-  };
-  localStorage.setItem('lcdpr_settings', JSON.stringify(settingsToSave));
+  const toSave = {...state, selectedIds: []};
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
 }
 
-async function loadState() {
+function loadState() {
   try {
-    const rawSettings = localStorage.getItem('lcdpr_settings');
-    if (rawSettings) {
-      const parsedSettings = JSON.parse(rawSettings);
-      state = {...state, ...parsedSettings};
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      state = {...state, ...parsed, selectedIds: new Set()};
     }
   } catch(e) {}
-
-  document.getElementById('ano-badge').textContent = `Ano: ${state.anoCalendario}`;
-
-  try {
-    const { data, error } = await supabase
-      .from('lancamentos')
-      .select('*')
-      .order('data', { ascending: true });
-
-    if (error) throw error;
-
-    if (data && data.length > 0) {
-      state.lancamentos = data;
-    } else {
-      await seedDataSupabase();
-    }
-  } catch (error) {
-    console.error('Erro ao conectar com o Supabase:', error);
-    toast('Erro de ligação ao Supabase!', 'error');
-  }
-  
-  renderPage(currentPage);
+  if (state.lancamentos.length === 0) seedData();
 }
 
-async function seedDataSupabase() {
+function seedData() {
   const seeds = [
     {data:'2025-01-10',codigoImovel:'IM001',codigoConta:'CC001',numeroDocumento:'NF-0001',tipoDocumento:1,historico:'Venda de soja safra 2024/2025 - Lote 01',cpfCnpj:'12.345.678/0001-99',tipoLancamento:1,valor:1200000,situacao:'N'},
     {data:'2025-01-22',codigoImovel:'IM001',codigoConta:'CC001',numeroDocumento:'REC-0010',tipoDocumento:3,historico:'Compra de sementes de milho - fornecedor Agrosul',cpfCnpj:'987.654.321-00',tipoLancamento:2,valor:380000,situacao:'N'},
@@ -330,21 +330,12 @@ async function seedDataSupabase() {
     {data:'2025-05-12',codigoImovel:'IM003',codigoConta:'CC003',numeroDocumento:'NF-0058',tipoDocumento:1,historico:'Venda de cana-de-açúcar - Usina Norte',cpfCnpj:'77.888.999/0001-00',tipoLancamento:1,valor:680000,situacao:'P'},
     {data:'2025-05-28',codigoImovel:'IM002',codigoConta:'CC002',numeroDocumento:'REC-0041',tipoDocumento:3,historico:'Compra de fertilizantes NPK',cpfCnpj:'888.999.000-11',tipoLancamento:2,valor:320000,situacao:'N'},
   ];
-  
-  const mappedSeeds = seeds.map(s => ({
-    ...s, 
-    createdAt: new Date().toISOString(), 
-    updatedAt: new Date().toISOString()
-  }));
+  state.lancamentos = seeds.map(s => ({...s, id: genId(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()}));
+  saveState();
+}
 
-  const { data, error } = await supabase
-    .from('lancamentos')
-    .insert(mappedSeeds)
-    .select();
-
-  if (!error && data) {
-    state.lancamentos = data;
-  }
+function genId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2);
 }
 
 // ============================================================
@@ -360,18 +351,24 @@ function formatDate(iso) {
   return `${d}/${m}/${y}`;
 }
 
+function formatLCDPR(centavos) {
+  return String(Math.abs(Math.round(centavos))).padStart(18, '0');
+}
+
+function formatDataLCDPR(iso) {
+  const [y,m,d] = iso.split('-');
+  return `${d}${m}${y}`;
+}
+
 function formatMesAnoLCDPR(iso) {
   const [y,m] = iso.split('-');
   return `${m}${y}`;
 }
 
-function tipoLanctoLabel(t) {
-  return {1:'Receita',2:'Despesa',3:'Adiantamento'}[t] || '';
-}
-
-function mesLabel(mm) {
-  const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-  return meses[parseInt(mm)-1] || mm;
+function maskCpfCnpj(v) {
+  const d = v.replace(/\D/g,'');
+  if (d.length <= 11) return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/,'$1.$2.$3-$4');
+  return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/,'$1.$2.$3/$4-$5');
 }
 
 function parseBRL(v) {
@@ -382,11 +379,27 @@ function formatInputBRL(centavos) {
   return (centavos/100).toFixed(2).replace('.',',');
 }
 
+function tipoLanctoLabel(t) {
+  return {1:'Receita',2:'Despesa',3:'Adiantamento'}[t] || '';
+}
+
+function tipoDocLabel(t) {
+  return {1:'Nota Fiscal',2:'Fatura',3:'Recibo',4:'Contrato',5:'Folha Pgto',6:'Outros'}[t] || '';
+}
+
+function mesLabel(mm) {
+  const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  return meses[parseInt(mm)-1] || mm;
+}
+
 // ============================================================
 // CALCULATORS
 // ============================================================
 function calcularSaldos(lancamentos) {
-  const sorted = [...lancamentos].sort((a,b) => new Date(a.data).getTime() - new Date(b.data).getTime());
+  const sorted = [...lancamentos].sort((a,b) => {
+    const da = new Date(a.data).getTime(), db = new Date(b.data).getTime();
+    return da !== db ? da - db : a.createdAt.localeCompare(b.createdAt);
+  });
   let saldo = 0;
   return sorted.map(l => {
     if (l.tipoLancamento === 1) saldo += l.valor;
@@ -424,29 +437,30 @@ function getStats() {
   }
   const saldoAtual = lancamentos.length ? lancamentos[lancamentos.length-1].saldoFinal : 0;
   const consolidado = consolidarPorMes(lancamentos);
-  return {totalReceitas, totalDespesas, saldoAtual, totalLancamentos: lancamentos.length, lancamentos, consolidado};
+  const mesesPos = consolidado.filter(m => m.tipo === 'P').length;
+  const mesesNeg = consolidado.filter(m => m.tipo === 'N').length;
+  return {totalReceitas, totalDespesas, saldoAtual, mesesPos, mesesNeg, totalLancamentos: lancamentos.length, lancamentos, consolidado};
 }
 
 // ============================================================
-// NAVIGATION & PAGE ROTATION
+// NAVIGATION
 // ============================================================
-let activePage = 'dashboard';
+let currentPageName = 'dashboard';
 
 function navigate(page) {
-  activePage = page;
+  currentPageName = page;
   document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active'));
-  
-  const menuMap = {dashboard:0, novo:1, lancamentos:2, exportacao:3, consolidacao:4, demonstrativo:5, config:6};
+  const map = {dashboard:0,novo:1,lancamentos:2,exportacao:3,consolidacao:4,demonstrativo:5,config:6};
   const items = document.querySelectorAll('.menu-item');
-  if (items[menuMap[page]]) items[menuMap[page]].classList.add('active');
+  if (items[map[page]]) items[map[page]].classList.add('active');
 
   const titles = {
-    dashboard:'Dashboard', novo:'Novo Lançamento', lancamentos:'Todos os Lançamentos',
-    exportacao:'Exportar LCDPR TXT', consolidacao:'Consolidação Mensal (Q200)',
-    demonstrativo:'Demonstrativo de Lançamentos', config:'Configurações'
+    dashboard:'Dashboard',novo:'Novo Lançamento',lancamentos:'Todos os Lançamentos',
+    exportacao:'Exportar LCDPR TXT',consolidacao:'Consolidação Mensal (Q200)',
+    demonstrativo:'Demonstrativo de Lançamentos',config:'Configurações'
   };
   document.getElementById('page-title').textContent = titles[page] || page;
-  if(page !== 'novo') state.editingId = null;
+  state.editingId = null;
   renderPage(page);
 }
 
@@ -464,41 +478,102 @@ function renderPage(page) {
 }
 
 // ============================================================
-// VIEWS PARTS
+// DASHBOARD
 // ============================================================
 function renderDashboard() {
-  const {totalReceitas, totalDespesas, saldoAtual, totalLancamentos, lancamentos} = getStats();
-  const ultimos = [...lancamentos].reverse().slice(0,5);
-
+  const {totalReceitas, totalDespesas, saldoAtual, mesesPos, mesesNeg, totalLancamentos, lancamentos} = getStats();
+  const ultimos = [...lancamentos].reverse().slice(0,6);
   return `
-  <div class="cards-grid">
-    <div class="stat-card green"><div class="label">Total Receitas</div><div class="value">${formatBRL(totalReceitas)}</div></div>
-    <div class="stat-card red"><div class="label">Total Despesas</div><div class="value">${formatBRL(totalDespesas)}</div></div>
-    <div class="stat-card ${saldoAtual >= 0 ? 'green':'red'}"><div class="label">Saldo Atual</div><div class="value">${formatBRL(saldoAtual)}</div></div>
-    <div class="stat-card blue"><div class="label">Lançamentos</div><div class="value">${totalLancamentos}</div></div>
-  </div>
-  <div class="charts-row">
-    <div class="chart-card"><h3>Evolução Mensal</h3><div class="chart-wrap"><canvas id="chartBar"></canvas></div></div>
-    <div class="chart-card"><h3>Distribuição</h3><div class="chart-wrap"><canvas id="chartPie"></canvas></div></div>
-  </div>`;
+    <div class="cards-grid">
+      <div class="stat-card green">
+        <div class="label">Total Receitas</div>
+        <div class="value">${formatBRL(totalReceitas)}</div>
+        <div class="sub">Todas as entradas</div>
+      </div>
+      <div class="stat-card red">
+        <div class="label">Total Despesas</div>
+        <div class="value">${formatBRL(totalDespesas)}</div>
+        <div class="sub">Todos os gastos</div>
+      </div>
+      <div class="stat-card ${saldoAtual >= 0 ? 'green' : 'red'}">
+        <div class="label">Saldo Atual</div>
+        <div class="value">${formatBRL(saldoAtual)}</div>
+        <div class="sub">${saldoAtual >= 0 ? '▲ Positivo' : '▼ Negativo'}</div>
+      </div>
+      <div class="stat-card blue">
+        <div class="label">Lançamentos</div>
+        <div class="value">${totalLancamentos}</div>
+        <div class="sub">Registros totais</div>
+      </div>
+      <div class="stat-card green">
+        <div class="label">Meses Positivos</div>
+        <div class="value">${mesesPos}</div>
+        <div class="sub">Resultado favorável</div>
+      </div>
+      <div class="stat-card red">
+        <div class="label">Meses Negativos</div>
+        <div class="value">${mesesNeg}</div>
+        <div class="sub">Resultado desfavorável</div>
+      </div>
+    </div>
+    <div class="charts-row">
+      <div class="chart-card">
+        <h3>Evolução Mensal — Receitas vs Despesas</h3>
+        <div class="chart-wrap"><canvas id="chartBar"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>Distribuição por Tipo</h3>
+        <div class="chart-wrap"><canvas id="chartPie"></canvas></div>
+      </div>
+    </div>
+    <div class="table-card">
+      <div class="table-header">
+        <h3>Últimos Lançamentos</h3>
+        <button class="btn btn-outline btn-sm" onclick="navigate('lancamentos')">Ver todos →</button>
+      </div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr>
+            <th>Data</th><th>Imóvel</th><th>Histórico</th><th>Tipo</th><th>Valor</th><th>Saldo</th>
+          </tr></thead>
+          <tbody>
+            ${ultimos.length === 0 ? `<tr><td colspan="6"><div class="empty-state"><p>Nenhum lançamento encontrado.</p></div></td></tr>` : ultimos.map(l => `
+              <tr>
+                <td>${formatDate(l.data)}</td>
+                <td>${l.codigoImovel}</td>
+                <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${l.historico}</td>
+                <td><span class="badge ${l.tipoLancamento===1?'badge-receita':l.tipoLancamento===2?'badge-despesa':'badge-adiantamento'}">${tipoLanctoLabel(l.tipoLancamento)}</span></td>
+                <td class="${l.tipoLancamento===1?'receita-val':'despesa-val'}">${formatBRL(l.valor)}</td>
+                <td class="${l.saldoFinal>=0?'saldo-pos':'saldo-neg'}">${formatBRL(l.saldoFinal)}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
 }
 
 function initCharts() {
-  const {consolidado, totalReceitas, totalDespesas} = getStats();
+  const {consolidado} = getStats();
   const labels = consolidado.map(c => mesLabel(c.mesAno.slice(0,2))+'/'+c.mesAno.slice(2));
+  const rec = consolidado.map(c => c.receitas/100);
+  const desp = consolidado.map(c => c.despesas/100);
   
+  const totalRec = state.lancamentos.filter(l=>l.tipoLancamento===1).reduce((a,b)=>a+b.valor,0);
+  const totalDesp = state.lancamentos.filter(l=>l.tipoLancamento===2).reduce((a,b)=>a+b.valor,0);
+  const totalAdiant = state.lancamentos.filter(l=>l.tipoLancamento===3).reduce((a,b)=>a+b.valor,0);
+
   const barCtx = document.getElementById('chartBar');
   if (barCtx) {
     new Chart(barCtx, {
       type:'bar',
       data:{
-        labels: labels,
+        labels: labels.length ? labels : ['Sem dados'],
         datasets:[
-          {label:'Receitas', data: consolidado.map(c=>c.receitas/100), backgroundColor:'rgba(22,163,74,0.7)'},
-          {label:'Despesas', data: consolidado.map(c=>c.despesas/100), backgroundColor:'rgba(220,38,38,0.7)'}
+          {label:'Receitas',data:rec,backgroundColor:'rgba(22,163,74,0.7)',borderRadius:4},
+          {label:'Despesas',data:desp,backgroundColor:'rgba(220,38,38,0.7)',borderRadius:4},
         ]
       },
-      options:{responsive:true,maintainAspectRatio:false}
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:11}}}},scales:{y:{beginAtZero:true,ticks:{callback:v=>'R$'+v.toLocaleString('pt-BR')}}}}
     });
   }
 
@@ -507,221 +582,613 @@ function initCharts() {
     new Chart(pieCtx, {
       type:'pie',
       data:{
-        labels:['Receitas','Despesas'],
-        datasets:[{data:[totalReceitas/100, totalDespesas/100], backgroundColor:['#16a34a','#dc2626']}]
+        labels:['Receitas','Despesas','Adiantamentos'],
+        datasets:[{
+          data:[totalRec/100, totalDesp/100, totalAdiant/100],
+          backgroundColor:['#16a34a','#dc2626','#7c3aed']
+        }]
       },
-      options:{responsive:true,maintainAspectRatio:false}
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}
     });
   }
 }
 
+// ============================================================
+// FORMULARIO DE LANCAMENTOS
+// ============================================================
 function renderForm() {
-  const l = state.lancamentos.find(item => item.id === state.editingId) || {};
+  const l = state.editingId ? state.lancamentos.find(item => item.id === state.editingId) : null;
   return `
-  <form id="lancamento-form" onsubmit="salvarLancamento(event)">
     <div class="form-section">
-      <div class="form-section-title">${state.editingId ? '✏️ Editar Lançamento' : '➕ Novo Lançamento'}</div>
-      <div class="form-grid">
-        <div class="form-group"><label>Data *</label><input type="date" class="form-control" id="f-data" value="${l.data||new Date().toISOString().slice(0,10)}" required></div>
-        <div class="form-group">
-          <label>Imóvel Rural *</label>
-          <select class="form-control" id="f-imovel" required>
-            ${state.imoveis.map(i=>`<option value="${i.codigo}" ${l.codigoImovel===i.codigo?'selected':''}>${i.descricao}</option>`).join('')}
-          </select>
+      <div class="form-section-title">${l ? 'Editar Lançamento' : 'Novo Lançamento'}</div>
+      <form id="lancto-form" onsubmit="salvarLancamento(event)">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Data</label>
+            <input type="date" id="f-data" class="form-control" value="${l ? l.data : ''}" required>
+          </div>
+          <div class="form-group">
+            <label>Imóvel Rural</label>
+            <select id="f-imovel" class="form-control" required>
+              <option value="">Selecione...</option>
+              ${state.imoveis.map(i => `<option value="${i.codigo}" ${l && l.codigoImovel===i.codigo?'selected':''}>${i.codigo} - ${i.descricao}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Conta Bancária</label>
+            <select id="f-conta" class="form-control" required>
+              <option value="">Selecione...</option>
+              ${state.contas.map(c => `<option value="${c.codigo}" ${l && l.codigoConta===c.codigo?'selected':''}>${c.codigo} - ${c.descricao}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Tipo Documento</label>
+            <select id="f-tipodoc" class="form-control" required>
+              <option value="1" ${l && l.tipoDocumento===1?'selected':''}>Nota Fiscal</option>
+              <option value="2" ${l && l.tipoDocumento===2?'selected':''}>Fatura</option>
+              <option value="3" ${l && l.tipoDocumento===3?'selected':''}>Recibo</option>
+              <option value="4" ${l && l.tipoDocumento===4?'selected':''}>Contrato</option>
+              <option value="5" ${l && l.tipoDocumento===5?'selected':''}>Folha de Pagamento</option>
+              <option value="6" ${l && l.tipoDocumento===6?'selected':''}>Outros</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Número Documento</label>
+            <input type="text" id="f-numdoc" class="form-control" value="${l ? l.numeroDocumento : ''}" required>
+          </div>
+          <div class="form-group">
+            <label>CPF/CNPJ do Participante</label>
+            <input type="text" id="f-cpfcnpj" class="form-control" value="${l ? maskCpfCnpj(l.cpfCnpj) : ''}" oninput="this.value=maskCpfCnpj(this.value)" placeholder="000.000.000-00 ou 00.000.000/0001-00" required>
+          </div>
+          <div class="form-group">
+            <label>Tipo Lançamento</label>
+            <select id="f-tipolancto" class="form-control" required>
+              <option value="1" ${l && l.tipoLancamento===1?'selected':''}>1 - Receita</option>
+              <option value="2" ${l && l.tipoLancamento===2?'selected':''}>2 - Despesa</option>
+              <option value="3" ${l && l.tipoLancamento===3?'selected':''}>3 - Adiantamento</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Valor (R$)</label>
+            <input type="text" id="f-valor" class="form-control" value="${l ? formatInputBRL(l.valor) : ''}" oninput="this.value=this.value.replace(/[^0-9,]/g,'')" placeholder="0,00" required>
+          </div>
+          <div class="form-group">
+            <label>Situação LCDPR</label>
+            <select id="f-situacao" class="form-control" required>
+              <option value="N" ${l && l.situacao==='N'?'selected':''}>N - Normal</option>
+              <option value="P" ${l && l.situacao==='P'?'selected':''}>P - Pendente / Retificado</option>
+            </select>
+          </div>
         </div>
-        <div class="form-group">
-          <label>Conta Bancária *</label>
-          <select class="form-control" id="f-conta" required>
-            ${state.contas.map(c=>`<option value="${c.codigo}" ${l.codigoConta===c.codigo?'selected':''}>${c.descricao}</option>`).join('')}
-          </select>
+        <div class="form-group" style="margin-top:16px">
+          <label>Histórico da Operação</label>
+          <textarea id="f-historico" class="form-control" maxlength="250" placeholder="Descrição completa da operação rural..." required>${l ? l.historico : ''}</textarea>
         </div>
-        <div class="form-group"><label>Histórico *</label><input type="text" class="form-control" id="f-historico" value="${l.historico||''}" required></div>
-        <div class="form-group"><label>CPF/CNPJ</label><input type="text" class="form-control" id="f-cpfCnpj" value="${l.cpfCnpj||''}"></div>
-        <div class="form-group">
-          <label>Tipo *</label>
-          <select class="form-control" id="f-tipo" required>
-            <option value="1" ${l.tipoLancamento===1?'selected':''}>Receita</option>
-            <option value="2" ${l.tipoLancamento===2?'selected':''}>Despesa</option>
-          </select>
+        <div style="margin-top:24px;display:flex;gap:8px">
+          <button type="submit" class="btn btn-success">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+            Salvar Lançamento
+          </button>
+          <button type="button" class="btn btn-outline" onclick="navigate('lancamentos')">Cancelar</button>
         </div>
-        <div class="form-group"><label>Valor (R$) *</label><input type="text" class="form-control" id="f-valor" value="${l.valor ? formatInputBRL(l.valor) : '0,00'}" required></div>
-      </div>
-      <div style="margin-top:20px; display:flex; gap:10px;">
-        <button type="submit" class="btn btn-success">Salvar no Supabase</button>
-        <button type="button" class="btn btn-outline" onclick="navigate('lancamentos')">Cancelar</button>
-      </div>
-    </div>
-  </form>`;
+      </form>
+    </div>`;
 }
 
-async function salvarLancamento(e) {
+function salvarLancamento(e) {
   e.preventDefault();
-  const payload = {
+  const rawValor = document.getElementById('f-valor').value;
+  const valorCentavos = parseBRL(rawValor);
+  
+  if (valorCentavos <= 0) {
+    toast('O valor deve ser maior do que zero.', 'error');
+    return;
+  }
+
+  const lancto = {
     data: document.getElementById('f-data').value,
     codigoImovel: document.getElementById('f-imovel').value,
     codigoConta: document.getElementById('f-conta').value,
+    tipoDocumento: parseInt(document.getElementById('f-tipodoc').value),
+    numeroDocumento: document.getElementById('f-numdoc').value,
+    cpfCnpj: document.getElementById('f-cpfcnpj').value.replace(/\D/g,''),
+    tipoLancamento: parseInt(document.getElementById('f-tipolancto').value),
+    valor: valorCentavos,
+    situacao: document.getElementById('f-situacao').value,
     historico: document.getElementById('f-historico').value,
-    cpfCnpj: document.getElementById('f-cpfCnpj').value,
-    tipoLancamento: parseInt(document.getElementById('f-tipo').value),
-    valor: parseBRL(document.getElementById('f-valor').value),
-    numeroDocumento: 'NF-SUPA',
-    tipoDocumento: 1,
-    situacao: 'N',
     updatedAt: new Date().toISOString()
   };
 
-  try {
-    if (state.editingId) {
-      const { error } = await supabase.from('lancamentos').update(payload).eq('id', state.editingId);
-      if (error) throw error;
-      toast('Lançamento atualizado no Supabase!', 'success');
-    } else {
-      payload.createdAt = new Date().toISOString();
-      const { error } = await supabase.from('lancamentos').insert([payload]);
-      if (error) throw error;
-      toast('Lançamento guardado no Supabase!', 'success');
+  if (state.editingId) {
+    const idx = state.lancamentos.findIndex(item => item.id === state.editingId);
+    if(idx !== -1) {
+      lancto.id = state.editingId;
+      lancto.createdAt = state.lancamentos[idx].createdAt;
+      state.lancamentos[idx] = lancto;
     }
-  } catch (error) {
-    console.error(error);
-    toast('Erro ao guardar dados.', 'error');
+    state.editingId = null;
+    toast('Lançamento atualizado com sucesso!', 'success');
+  } else {
+    lancto.id = genId();
+    lancto.createdAt = new Date().toISOString();
+    state.lancamentos.push(lancto);
+    toast('Lançamento inserido com sucesso!', 'success');
   }
-  state.editingId = null;
-  await loadState();
+
+  saveState();
+  navigate('lancamentos');
 }
 
+// ============================================================
+// TABELA PRINCIPAL DE LANCAMENTOS
+// ============================================================
 function renderLancamentos() {
+  let list = calcularSaldos(state.lancamentos);
+
+  if (state.filterTipo) list = list.filter(l => l.tipoLancamento === parseInt(state.filterTipo));
+  if (state.filterImovel) list = list.filter(l => l.codigoImovel === state.filterImovel);
+  if (state.filterSearch) {
+    const s = state.filterSearch.toLowerCase();
+    list = list.filter(l => l.historico.toLowerCase().includes(s) || l.numeroDocumento.toLowerCase().includes(s));
+  }
+
+  // Sorting
+  list.sort((a,b) => {
+    let va = a[state.sortCol], vb = b[state.sortCol];
+    if (typeof va === 'string') return state.sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+    return state.sortDir === 'asc' ? va - vb : vb - va;
+  });
+
+  // Pagination
+  const totalItems = list.length;
+  const totalPages = Math.ceil(totalItems / state.itemsPerPage) || 1;
+  if (state.currentPage > totalPages) state.currentPage = totalPages;
+  const start = (state.currentPage - 1) * state.itemsPerPage;
+  const paginated = list.slice(start, start + state.itemsPerPage);
+
+  const totalReceitas = paginated.filter(l => l.tipoLancamento===1).reduce((a,b)=>a+b.valor,0);
+  const totalDespesas = paginated.filter(l => l.tipoLancamento===2).reduce((a,b)=>a+b.valor,0);
+
   return `
-  <div class="table-card">
-    <div class="table-header"><h3>Todos os Lançamentos Activos (Supabase)</h3></div>
-    <table style="width:100%">
-      <thead><tr><th>Data</th><th>Histórico</th><th>Tipo</th><th>Valor</th><th>Ações</th></tr></thead>
-      <tbody>
-        ${state.lancamentos.map(l => `
-          <tr>
-            <td>${formatDate(l.data)}</td>
-            <td>${l.historico}</td>
-            <td><span class="badge ${l.tipoLancamento===1?'badge-receita':'badge-despesa'}">${tipoLanctoLabel(l.tipoLancamento)}</span></td>
-            <td class="${l.tipoLancamento===1?'receita-val':'despesa-val'}">${formatBRL(l.valor)}</td>
-            <td>
-              <button class="btn btn-outline btn-sm" onclick="editarReg('${l.id}')">Editar</button>
-              <button class="btn btn-danger btn-sm" onclick="deletarReg('${l.id}')">Excluir</button>
-            </td>
-          </tr>
-        `).join('')}
-      </tbody>
-    </table>
-  </div>`;
+    <div class="table-card">
+      <div class="table-actions">
+        <div class="search-box">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;color:var(--text3)"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" placeholder="Buscar histórico/doc..." value="${state.filterSearch}" oninput="state.filterSearch=this.value;state.currentPage=1;renderPage('lancamentos')">
+        </div>
+        <select class="form-control" style="width:130px;padding:5px 8px;" onchange="state.filterTipo=this.value;state.currentPage=1;renderPage('lancamentos')">
+          <option value="">Todos os Tipos</option>
+          <option value="1" ${state.filterTipo==='1'?'selected':''}>Receitas</option>
+          <option value="2" ${state.filterTipo==='2'?'selected':''}>Despesas</option>
+          <option value="3" ${state.filterTipo==='3'?'selected':''}>Adiantamentos</option>
+        </select>
+        <select class="form-control" style="width:160px;padding:5px 8px;" onchange="state.filterImovel=this.value;state.currentPage=1;renderPage('lancamentos')">
+          <option value="">Todos os Imóveis</option>
+          ${state.imoveis.map(i => `<option value="${i.codigo}" ${state.filterImovel===i.codigo?'selected':''}>${i.descricao}</option>`).join('')}
+        </select>
+        <div style="margin-left:auto;display:flex;gap:6px">
+          ${state.selectedIds.size > 0 ? `<button class="btn btn-danger btn-sm" onclick="deletarLotes()">Remover (${state.selectedIds.size})</button>` : ''}
+          <button class="btn btn-primary btn-sm" onclick="navigate('novo')">Novo Registro</button>
+        </div>
+      </div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:40px"><input type="checkbox" ${paginated.length > 0 && paginated.every(l=>state.selectedIds.has(l.id))?'checked':''} onchange="toggleSelectAll(this, ${JSON.stringify(paginated.map(l=>l.id)).replace(/"/g,'&quot;')})"></th>
+              <th onclick="toggleSort('data')">Data ${state.sortCol==='data'?(state.sortDir==='asc'?'▲':'▼'):''}</th>
+              <th onclick="toggleSort('codigoImovel')">Imóvel ${state.sortCol==='codigoImovel'?(state.sortDir==='asc'?'▲':'▼'):''}</th>
+              <th>Documento</th>
+              <th onclick="toggleSort('historico')">Histórico ${state.sortCol==='historico'?(state.sortDir==='asc'?'▲':'▼'):''}</th>
+              <th>Tipo</th>
+              <th onclick="toggleSort('valor')" style="text-align:right">Valor ${state.sortCol==='valor'?(state.sortDir==='asc'?'▲':'▼'):''}</th>
+              <th style="text-align:right">Saldo Caixa</th>
+              <th style="text-align:center;width:90px">Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${paginated.length === 0 ? `<tr><td colspan="9"><div class="empty-state"><h3>Nenhum registro</h3><p>Use os botões acima para cadastrar dados.</p></div></td></tr>` : paginated.map(l => `
+              <tr>
+                <td><input type="checkbox" ${state.selectedIds.has(l.id)?'checked':''} onchange="toggleSelectId('${l.id}')"></td>
+                <td>${formatDate(l.data)}</td>
+                <td><span class="badge badge-normal" title="${l.codigoImovel}">${l.codigoImovel}</span></td>
+                <td><small style="color:var(--text3)">${tipoDocLabel(l.tipoDocumento)}</small><br><strong>${l.numeroDocumento}</strong></td>
+                <td style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${l.historico}">${l.historico}</td>
+                <td><span class="badge ${l.tipoLancamento===1?'badge-receita':l.tipoLancamento===2?'badge-despesa':'badge-adiantamento'}">${tipoLanctoLabel(l.tipoLancamento)}</span></td>
+                <td style="text-align:right" class="${l.tipoLancamento===1?'receita-val':'despesa-val'}">${formatBRL(l.valor)}</td>
+                <td style="text-align:right" class="${l.saldoFinal>=0?'saldo-pos':'saldo-neg'}">${formatBRL(l.saldoFinal)}</td>
+                <td style="text-align:center">
+                  <button class="btn btn-ghost btn-sm" style="color:var(--primary)" onclick="editarLancamento('${l.id}')">✏️</button>
+                  <button class="btn btn-ghost btn-sm" onclick="confirmarExclusao('${l.id}')">🗑️</button>
+                </td>
+              </tr>`).join('')}
+          </tbody>
+          <tfoot>
+            <tr class="tfoot-row">
+              <td colspan="6" style="text-align:right">Subtotal Geral da Página:</td>
+              <td style="text-align:right;color:var(--success)">+${formatBRL(totalReceitas)}</td>
+              <td style="text-align:right;color:var(--danger)">-${formatBRL(totalDespesas)}</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <div class="pagination">
+        <button class="page-btn" ${state.currentPage===1?'disabled':''} onclick="state.currentPage--;renderPage('lancamentos')">◄ Voltar</button>
+        <span class="page-info">Página <strong>${state.currentPage}</strong> de ${totalPages} (${totalItems} itens no total)</span>
+        <button class="page-btn" ${state.currentPage===totalPages?'disabled':''} style="margin-left:auto" onclick="state.currentPage++;renderPage('lancamentos')">Avançar ►</button>
+      </div>
+    </div>`;
 }
 
-function editarReg(id) {
+function toggleSort(col) {
+  if (state.sortCol === col) {
+    state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    state.sortCol = col;
+    state.sortDir = 'asc';
+  }
+  renderPage('lancamentos');
+}
+
+function toggleSelectId(id) {
+  if (state.selectedIds.has(id)) state.selectedIds.delete(id);
+  else state.selectedIds.add(id);
+  renderPage('lancamentos');
+}
+
+function toggleSelectAll(chk, ids) {
+  if (chk.checked) ids.forEach(id => state.selectedIds.add(id));
+  else ids.forEach(id => state.selectedIds.delete(id));
+  renderPage('lancamentos');
+}
+
+function editarLancamento(id) {
   state.editingId = id;
   navigate('novo');
 }
 
-async function deletarReg(id) {
-  if (!confirm('Deseja mesmo excluir este registro do Supabase?')) return;
-  try {
-    const { error } = await supabase.from('lancamentos').delete().eq('id', id);
-    if (error) throw error;
-    toast('Removido com sucesso!', 'success');
-    await loadState();
-  } catch (error) {
-    console.error(error);
-    toast('Erro ao deletar.', 'error');
+function confirmarExclusao(id) {
+  const corpo = `<p>Tem certeza de que deseja remover permanentemente o lançamento selecionado?</p><br><p><small style="color:var(--text3)">Esta ação recalculará automaticamente os saldos do caixa subsequentes.</small></p>`;
+  const rodape = `
+    <button class="btn btn-danger" onclick="removerLancamentoDirect('${id}')">Confirmar Exclusão</button>
+    <button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
+  `;
+  abrirModal('Excluir Registro', corpo, rodape);
+}
+
+function removerLancamentoDirect(id) {
+  state.lancamentos = state.lancamentos.filter(l => l.id !== id);
+  state.selectedIds.delete(id);
+  saveState();
+  fecharModal();
+  toast('Registro removido com sucesso!', 'warning');
+  renderPage('lancamentos');
+}
+
+function deletarLotes() {
+  if (confirm(`Deseja remover os ${state.selectedIds.size} registros selecionados?`)) {
+    state.lancamentos = state.lancamentos.filter(l => !state.selectedIds.has(l.id));
+    state.selectedIds.clear();
+    saveState();
+    toast('Registros excluídos em lote.', 'warning');
+    renderPage('lancamentos');
   }
 }
 
+// ============================================================
+// EXPORTAÇÃO COMPLETA DO LIVRO CAIXA DIGITAL (LCDPR)
+// ============================================================
 function renderExportacao() {
-  return `<div class="empty-state"><h3>Módulo de Exportação</h3><p>Pronto para gerar arquivos baseados nos dados do Supabase.</p></div>`;
+  return `
+    <div class="form-section">
+      <div class="form-section-title">Dados Obrigatórios da Declaração (Blocos 0 e Q)</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>CPF do Produtor Rural</label>
+          <input type="text" id="cfg-cpf" class="form-control" value="${maskCpfCnpj(state.cpfProdutor)}" oninput="this.value=maskCpfCnpj(this.value)">
+        </div>
+        <div class="form-group">
+          <label>Nome Completo do Produtor</label>
+          <input type="text" id="cfg-nome" class="form-control" value="${state.nomeProdutor}" placeholder="Nome conforme cadastro Receita">
+        </div>
+        <div class="form-group">
+          <label>Ano Calendário</label>
+          <input type="number" id="cfg-ano" class="form-control" value="${state.anoCalendario}">
+        </div>
+      </div>
+      <div style="margin-top:20px;display:flex;gap:8px">
+        <button class="btn btn-primary" onclick="salvarDadosProdutor()">Salvar Dados</button>
+        <button class="btn btn-success" onclick="gerarLinhasLCDPR()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Gerar Arquivo Validável (.TXT)
+        </button>
+      </div>
+    </div>
+    <div id="export-preview-box" style="display:none">
+      <div class="form-section">
+        <div class="form-section-title">Pré-visualização do Arquivo (Estrutura Digital)</div>
+        <div class="txt-preview" id="txt-preview-content"></div>
+        <div style="margin-top:16px">
+          <button class="btn btn-primary" onclick="fazerDownloadTXT()">Baixar Arquivo Oficial</button>
+        </div>
+      </div>
+    </div>`;
 }
 
+function salvarDadosProdutor() {
+  state.cpfProdutor = document.getElementById('cfg-cpf').value.replace(/\D/g,'');
+  state.nomeProdutor = document.getElementById('cfg-nome').value.toUpperCase();
+  state.anoCalendario = parseInt(document.getElementById('cfg-ano').value) || 2025;
+  saveState();
+  document.getElementById('ano-badge').textContent = `Ano: ${state.anoCalendario}`;
+  toast('Dados cadastrais salvos para exportação.', 'success');
+}
+
+let textGeradoOficial = '';
+
+function gerarLinhasLCDPR() {
+  salvarDadosProdutor();
+  if(!state.cpfProdutor || !state.nomeProdutor) {
+    toast('Preencha o CPF e o Nome do Produtor Rural antes de exportar.', 'error');
+    return;
+  }
+
+  const sorted = [...state.lancamentos].sort((a,b) => new Date(a.data).getTime() - new Date(b.data).getTime());
+  let linhas = [];
+
+  // 0000 - ABERTURA
+  linhas.push(`0000|LCDPR|0013|${state.cpfProdutor}|${state.nomeProdutor}|0|0||01012025|31122025`);
+  
+  // 0040 - IMOVEIS
+  state.imoveis.forEach(i => {
+    linhas.push(`0040|${i.codigo}|BR|${i.descricao}|||||||10000`);
+  });
+
+  // 0050 - CONTAS
+  state.contas.forEach(c => {
+    linhas.push(`0050|${c.codigo}|BR|||||${c.descricao}`);
+  });
+
+  // Q100 - LANÇAMENTOS DO LIVRO CAIXA
+  let saldoAcumulado = 0;
+  sorted.forEach(l => {
+    if (l.tipoLancamento === 1) saldoAcumulado += l.valor;
+    else if (l.tipoLancamento === 2) saldoAcumulado -= l.valor;
+    
+    linhas.push(`Q100|${formatDataLCDPR(l.data)}|${l.codigoImovel}|${l.codigoConta}|||${l.historico.substring(0,240)}|${l.cpfCnpj}|${l.tipoLancamento}|${formatLCDPR(l.valor)}|${formatLCDPR(saldoAcumulado)}|${l.situacao}`);
+  });
+
+  // Q200 - RESUMO MENSAL CONSOLIDADO
+  const mesesConsolidados = consolidarPorMes(state.lancamentos);
+  mesesConsolidados.forEach(m => {
+    linhas.push(`Q200|${m.mesAno}|${formatLCDPR(m.receitas)}|${formatLCDPR(m.despesas)}|${formatLCDPR(m.resultado)}|${m.tipo}`);
+  });
+
+  // 9999 - FECHAMENTO
+  linhas.push(`9999||${linhas.length + 1}`);
+
+  textGeradoOficial = linhas.join('\r\n');
+  document.getElementById('txt-preview-content').textContent = textGeradoOficial;
+  document.getElementById('export-preview-box').style.display = 'block';
+  toast('Arquivo estruturado com sucesso!', 'success');
+}
+
+function fazerDownloadTXT() {
+  if (!textGeradoOficial) return;
+  const blob = new Blob([textGeradoOficial], {type: 'text/plain;charset=utf-8'});
+  const el = document.createElement('a');
+  el.href = URL.createObjectURL(blob);
+  el.download = `LCDPR_${state.cpfProdutor}_${state.anoCalendario}.txt`;
+  document.body.appendChild(el);
+  el.click();
+  document.body.removeChild(el);
+}
+
+// ============================================================
+// CONSOLIDACAO MENSAL (Q200)
+// ============================================================
 function renderConsolidacao() {
   const {consolidado} = getStats();
   return `
-  <div class="table-card">
-    <div class="table-header"><h3>Resumo de Consolidação Mensal</h3></div>
-    <table class="consol-table">
-      <thead><tr><th>Mês/Ano</th><th>Receitas</th><th>Despesas</th><th>Resultado</th><th>Tipo</th></tr></thead>
-      <tbody>
-        ${consolidado.map(c => `
-          <tr>
-            <td>${c.mesAno.slice(0,2)}/${c.mesAno.slice(2)}</td>
-            <td class="receita-val">${formatBRL(c.receitas)}</td>
-            <td class="despesa-val">${formatBRL(c.despesas)}</td>
-            <td>${formatBRL(c.resultado)}</td>
-            <td class="tipo-${c.tipo}">${c.tipo === 'P' ? 'LUCRO' : 'PREJUÍZO'}</td>
-          </tr>
-        `).join('')}
-      </tbody>
-    </table>
-  </div>`;
+    <div class="table-card">
+      <div class="table-header">
+        <h3>Resumo Mensal Consolidado (Bloco Q200)</h3>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="consol-table">
+          <thead>
+            <tr>
+              <th>Período/Mês</th>
+              <th>Entradas / Receitas</th>
+              <th>Saídas / Despesas</th>
+              <th>Resultado Líquido</th>
+              <th style="text-align:center">Indicador</th>
+              <th style="text-align:center">Registros</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${consolidado.length === 0 ? `<tr><td colspan="6"><div class="empty-state"><p>Nenhum lançamento no período.</p></div></td></tr>` : consolidado.map(c => `
+              <tr>
+                <td><strong>${mesLabel(c.mesAno.slice(0,2))} / ${c.mesAno.slice(2)}</strong></td>
+                <td class="receita-val">${formatBRL(c.receitas)}</td>
+                <td class="despesa-val">${formatBRL(c.despesas)}</td>
+                <td style="font-weight:700">${formatBRL(c.resultado)}</td>
+                <td style="text-align:center"><span class="badge ${c.tipo==='P'?'badge-receita':'badge-despesa'}">${c.tipo==='P'?'Lucro (P)':'Prejuízo (N)'}</span></td>
+                <td style="text-align:center;color:var(--text3)">${c.qtdLancamentos} mov.</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
 }
 
+// ============================================================
+// DEMONSTRATIVO ANUAL DE RESULTADOS
+// ============================================================
 function renderDemonstrativo() {
-  const {lancamentos} = getStats();
+  const {totalReceitas, totalDespesas, saldoAtual, consolidado} = getStats();
   return `
-  <div class="table-card">
-    <table style="width:100%">
-      <thead><tr><th>Data</th><th>Conta</th><th>Histórico</th><th>Entradas</th><th>Saídas</th><th>Saldo</th></tr></thead>
-      <tbody>
-        ${lancamentos.map(l => `
-          <tr>
-            <td>${formatDate(l.data)}</td>
-            <td>${l.codigoConta}</td>
-            <td>${l.historico}</td>
-            <td class="receita-val">${l.tipoLancamento===1?formatBRL(l.valor):'-'}</td>
-            <td class="despesa-val">${l.tipoLancamento===2?formatBRL(l.valor):'-'}</td>
-            <td class="${l.saldoFinal>=0?'saldo-pos':'saldo-neg'}">${formatBRL(l.saldoFinal)}</td>
-          </tr>
-        `).join('')}
-      </tbody>
-    </table>
-  </div>`;
+    <div class="summary-bar">
+      <div class="sum-item"><div class="sl">Receitas Totais</div><div class="sv receita-val">${formatBRL(totalReceitas)}</div></div>
+      <div class="sum-item"><div class="sl">Despesas Totais</div><div class="sv despesa-val">${formatBRL(totalDespesas)}</div></div>
+      <div class="sum-item"><div class="sl">Resultado Operacional</div><div class="sv ${saldoAtual>=0?'receita-val':'despesa-val'}">${formatBRL(saldoAtual)}</div></div>
+    </div>
+    <div class="table-card">
+      <div class="table-header">
+        <h3>Fluxo Anual de Operações Rurais</h3>
+        <button class="btn btn-outline btn-sm" onclick="window.print()">🖨️ Imprimir Relatório</button>
+      </div>
+      <table class="report-table">
+        <thead><tr><th>Mês Operação</th><th>Receitas (R$)</th><th>Despesas (R$)</th><th>Resultado Caixa</th></tr></thead>
+        <tbody>
+          ${['01','02','03','04','05','06','07','08','09','10','11','12'].map(m => {
+            const c = consolidado.find(item => item.mesAno.substring(0,2) === m);
+            const r = c ? c.receitas : 0;
+            const d = c ? c.despesas : 0;
+            const res = r - d;
+            return `
+              <tr>
+                <td><strong>${mesLabel(m)}</strong></td>
+                <td style="color:${r>0?'var(--success)':'var(--text2)'}">${formatBRL(r)}</td>
+                <td style="color:${d>0?'var(--danger)':'var(--text2)'}">${formatBRL(d)}</td>
+                <td class="${res>=0?'saldo-pos':'saldo-neg'}">${formatBRL(res)}</td>
+              </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>`;
 }
 
+// ============================================================
+// CONFIGURAÇÕES GERAIS DO SISTEMA
+// ============================================================
 function renderConfig() {
   return `
-  <div class="form-section">
-    <div class="form-section-title">Configurações do Produtor</div>
-    <div class="form-group"><label>Nome do Produtor</label><input type="text" class="form-control" id="c-nome" value="${state.nomeProdutor||''}"></div><br>
-    <button class="btn btn-primary" onclick="salvarConfig()">Salvar Configurações</button>
-  </div>`;
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchConfigTab(this, 'c-imoveis')">Imóveis Rurais (0040)</button>
+      <button class="tab-btn" onclick="switchConfigTab(this, 'c-contas')">Contas Bancárias (0050)</button>
+    </div>
+    <div id="c-imoveis" class="config-subtab">
+      <div class="form-section">
+        <div class="form-section-title">Cadastrar Novo Imóvel Rural</div>
+        <div class="form-grid">
+          <div class="form-group"><label>Código Imóvel</label><input type="text" id="add-i-cod" class="form-control" placeholder="EX: IM004"></div>
+          <div class="form-group"><label>Nome / Descrição</label><input type="text" id="add-i-desc" class="form-control" placeholder="Fazenda Nova Esperança"></div>
+          <div class="form-group"><label>Município</label><input type="text" id="add-i-mun" class="form-control"></div>
+          <div class="form-group"><label>UF</label><input type="text" id="add-i-uf" class="form-control" maxlength="2"></div>
+        </div>
+        <button class="btn btn-primary" style="margin-top:16px" onclick="adicionarImovel()">Adicionar Imóvel</button>
+      </div>
+      <div class="table-card">
+        <table>
+          <thead><tr><th>Código</th><th>Descrição / Nome</th><th>Município</th><th>UF</th><th>Ações</th></tr></thead>
+          <tbody>
+            ${state.imoveis.map(i => `<tr><td><strong>${i.codigo}</strong></td><td>${i.descricao}</td><td>${i.municipio}</td><td>${i.uf}</td><td><button class="btn btn-ghost btn-sm" onclick="removerImovel('${i.id}')">✕</button></td></tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div id="c-contas" class="config-subtab" style="display:none">
+      <div class="form-section">
+        <div class="form-section-title">Cadastrar Nova Conta Bancária</div>
+        <div class="form-grid">
+          <div class="form-group"><label>Código Conta</label><input type="text" id="add-c-cod" class="form-control" placeholder="EX: CC005"></div>
+          <div class="form-group"><label>Descrição da Conta</label><input type="text" id="add-c-desc" class="form-control" placeholder="Itaú Agência Rural"></div>
+        </div>
+        <button class="btn btn-primary" style="margin-top:16px" onclick="adicionarConta()">Adicionar Conta</button>
+      </div>
+      <div class="table-card">
+        <table>
+          <thead><tr><th>Código</th><th>Descrição / Instituição</th><th>Ações</th></tr></thead>
+          <tbody>
+            ${state.contas.map(c => `<tr><td><strong>${c.codigo}</strong></td><td>${c.descricao}</td><td><button class="btn btn-ghost btn-sm" onclick="removerConta('${c.id}')">✕</button></td></tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
 }
 
-function salvarConfig() {
-  state.nomeProdutor = document.getElementById('c-nome').value;
+function switchConfigTab(btn, tabId) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.config-subtab').forEach(t => t.style.display = 'none');
+  document.getElementById(tabId).style.display = 'block';
+}
+
+function adicionarImovel() {
+  const codigo = document.getElementById('add-i-cod').value.trim().toUpperCase();
+  const descricao = document.getElementById('add-i-desc').value.trim();
+  const municipio = document.getElementById('add-i-mun').value.trim();
+  const uf = document.getElementById('add-i-uf').value.trim().toUpperCase();
+
+  if(!codigo || !descricao) { toast('Código e Descrição são campos obrigatórios.', 'error'); return; }
+  state.imoveis.push({id: genId(), codigo, descricao, municipio, uf});
   saveState();
-  toast('Configurações salvas localmente!', 'success');
+  toast('Imóvel rural adicionado com sucesso.', 'success');
+  renderPage('config');
+}
+
+function removerImovel(id) {
+  state.imoveis = state.imoveis.filter(i => i.id !== id);
+  saveState();
+  toast('Imóvel removido.', 'warning');
+  renderPage('config');
+}
+
+function adicionarConta() {
+  const codigo = document.getElementById('add-c-cod').value.trim().toUpperCase();
+  const descricao = document.getElementById('add-c-desc').value.trim();
+
+  if(!codigo || !descricao) { toast('Código e Descrição são campos obrigatórios.', 'error'); return; }
+  state.contas.push({id: genId(), codigo, descricao});
+  saveState();
+  toast('Conta bancária cadastrada.', 'success');
+  renderPage('config');
+}
+
+function removerConta(id) {
+  state.contas = state.contas.filter(c => c.id !== id);
+  saveState();
+  toast('Conta bancária removida.', 'warning');
+  renderPage('config');
 }
 
 // ============================================================
-// TOAST ANIMADO ORIGINAL CORRIGIDO
+// COMPONENTES AUXILIARES: MODAL & TOAST
 // ============================================================
-function toast(msg, tipo='info') {
-  const el = document.createElement('div');
-  el.className = `toast ${tipo}`;
-  const icons = {success:'✅', error:'❌', info:'ℹ️', warning:'⚠️'};
-  el.innerHTML = `<span>${icons[tipo]||'ℹ️'}</span> ${msg}`;
-  const container = document.getElementById('toast-container');
-  if(container) {
-    container.appendChild(el);
-    setTimeout(()=>{
-      el.style.opacity='0';
-      el.style.transform='translateX(40px)';
-      el.style.transition='all .3s';
-      setTimeout(()=>el.remove(), 300);
-    }, 3000);
-  }
+function abrirModal(titulo, corpo, rodape) {
+  document.getElementById('modal-title').textContent = titulo;
+  document.getElementById('modal-body').innerHTML = corpo;
+  document.getElementById('modal-footer').innerHTML = rodape;
+  document.getElementById('modal-overlay').classList.add('open');
 }
 
-function fecharModal() {
+function fecharModal(e) {
+  if (e && e.target !== document.getElementById('modal-overlay')) return;
   document.getElementById('modal-overlay').classList.remove('open');
 }
 
+function toast(msg, tipo='info') {
+  const el = document.createElement('div');
+  el.className = `toast ${tipo}`;
+  const icons = {success:'✅',error:'❌',info:'ℹ️',warning:'⚠️'};
+  el.innerHTML = `<span>${icons[tipo]||'ℹ️'}</span> ${msg}`;
+  const container = document.getElementById('toast-container');
+  container.appendChild(el);
+  setTimeout(()=>{
+    el.style.opacity='0';
+    el.style.transform='translateX(40px)';
+    el.style.transition='all .3s';
+    setTimeout(()=>el.remove(),300)
+  }, 3000);
+}
+
 // ============================================================
-// INIT APP
+// INICIALIZAÇÃO DA APLICAÇÃO
 // ============================================================
-window.addEventListener('DOMContentLoaded', loadState);
+loadState();
+navigate('dashboard');
 </script>
 </body>
 </html>
