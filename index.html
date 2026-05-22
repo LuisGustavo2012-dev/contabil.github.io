@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>LCDPR Digital — Livro Caixa Digital do Produtor Rural</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root {
   --bg: #f0f4f8;
@@ -196,7 +197,6 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--pr
 </head>
 <body>
 
-<!-- SIDEBAR -->
 <nav id="sidebar">
   <div class="sidebar-logo">
     <h1>🌿 LCDPR Digital</h1>
@@ -242,7 +242,6 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--pr
   </div>
 </nav>
 
-<!-- MAIN -->
 <div id="main">
   <div class="topbar" id="topbar">
     <h2 id="page-title">Dashboard</h2>
@@ -257,7 +256,6 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--pr
   <div id="content"></div>
 </div>
 
-<!-- MODAL -->
 <div class="modal-overlay" id="modal-overlay" onclick="fecharModal(event)">
   <div class="modal" id="modal">
     <div class="modal-header">
@@ -269,15 +267,19 @@ input[type=checkbox]{width:15px;height:15px;cursor:pointer;accent-color:var(--pr
   </div>
 </div>
 
-<!-- TOAST -->
 <div id="toast-container"></div>
 
 <script>
 // ============================================================
-// STATE & PERSISTENCE
+// CONFIGURAÇÃO SUPABASE
 // ============================================================
-const STORAGE_KEY = 'lcdpr_data_v2';
+const SUPABASE_URL = 'https://seu-projeto.supabase.co'; // <--- Altere para a sua URL do Supabase
+const SUPABASE_KEY = 'sua-chave-anon-public';         // <--- Altere para a sua chave pública anónima do Supabase
+const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+// ============================================================
+// STATE & CONFIG
+// ============================================================
 let state = {
   lancamentos: [],
   imoveis: [
@@ -305,24 +307,53 @@ let state = {
   selectedIds: new Set(),
 };
 
+// Modificado: O Estado Geral (Produtor/Configurações) continua no LocalStorage para conveniência rápida,
+// mas a tabela centralizada de lançamentos foi transferida inteiramente para o Supabase.
 function saveState() {
-  const toSave = {...state, selectedIds: []};
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+  const settingsToSave = {
+    cpfProdutor: state.cpfProdutor,
+    nomeProdutor: state.nomeProdutor,
+    anoCalendario: state.anoCalendario
+  };
+  localStorage.setItem('lcdpr_settings', JSON.stringify(settingsToSave));
 }
 
-function loadState() {
+// Alterado para Assíncrono para buscar os lançamentos do Supabase
+async function loadState() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      state = {...state, ...parsed, selectedIds: new Set()};
+    const rawSettings = localStorage.getItem('lcdpr_settings');
+    if (rawSettings) {
+      const parsedSettings = JSON.parse(rawSettings);
+      state = {...state, ...parsedSettings};
     }
   } catch(e) {}
-  // Seed data if empty
-  if (state.lancamentos.length === 0) seedData();
+
+  document.getElementById('ano-badge').textContent = `Ano: ${state.anoCalendario}`;
+
+  // Buscar lançamentos da tabela 'lancamentos' no Supabase
+  try {
+    const { data, error } = await supabase
+      .from('lancamentos')
+      .select('*')
+      .order('data', { ascending: true });
+
+    if (error) throw error;
+
+    if (data && data.length > 0) {
+      state.lancamentos = data;
+    } else {
+      // Se a tabela estiver vazia, injeta os dados iniciais
+      await seedDataSupabase();
+    }
+  } catch (error) {
+    console.error('Erro ao conectar com o Supabase, carregando local provisório:', error);
+    toast('Erro de ligação ao Supabase!', 'error');
+  }
+  
+  renderPage(currentPage);
 }
 
-function seedData() {
+async function seedDataSupabase() {
   const seeds = [
     {data:'2025-01-10',codigoImovel:'IM001',codigoConta:'CC001',numeroDocumento:'NF-0001',tipoDocumento:1,historico:'Venda de soja safra 2024/2025 - Lote 01',cpfCnpj:'12.345.678/0001-99',tipoLancamento:1,valor:1200000,situacao:'N'},
     {data:'2025-01-22',codigoImovel:'IM001',codigoConta:'CC001',numeroDocumento:'REC-0010',tipoDocumento:3,historico:'Compra de sementes de milho - fornecedor Agrosul',cpfCnpj:'987.654.321-00',tipoLancamento:2,valor:380000,situacao:'N'},
@@ -335,12 +366,21 @@ function seedData() {
     {data:'2025-05-12',codigoImovel:'IM003',codigoConta:'CC003',numeroDocumento:'NF-0058',tipoDocumento:1,historico:'Venda de cana-de-açúcar - Usina Norte',cpfCnpj:'77.888.999/0001-00',tipoLancamento:1,valor:680000,situacao:'P'},
     {data:'2025-05-28',codigoImovel:'IM002',codigoConta:'CC002',numeroDocumento:'REC-0041',tipoDocumento:3,historico:'Compra de fertilizantes NPK',cpfCnpj:'888.999.000-11',tipoLancamento:2,valor:320000,situacao:'N'},
   ];
-  state.lancamentos = seeds.map(s => ({...s, id: genId(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()}));
-  saveState();
-}
+  
+  const mappedSeeds = seeds.map(s => ({
+    ...s, 
+    createdAt: new Date().toISOString(), 
+    updatedAt: new Date().toISOString()
+  }));
 
-function genId() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2);
+  const { data, error } = await supabase
+    .from('lancamentos')
+    .insert(mappedSeeds)
+    .select();
+
+  if (!error && data) {
+    state.lancamentos = data;
+  }
 }
 
 // ============================================================
@@ -354,15 +394,6 @@ function formatDate(iso) {
   if (!iso) return '';
   const [y,m,d] = iso.split('-');
   return `${d}/${m}/${y}`;
-}
-
-function formatLCDPR(centavos) {
-  return String(Math.abs(Math.round(centavos))).padStart(18, '0');
-}
-
-function formatDataLCDPR(iso) {
-  const [y,m,d] = iso.split('-');
-  return `${d}${m}${y}`;
 }
 
 function formatMesAnoLCDPR(iso) {
@@ -386,10 +417,6 @@ function formatInputBRL(centavos) {
 
 function tipoLanctoLabel(t) {
   return {1:'Receita',2:'Despesa',3:'Adiantamento'}[t] || '';
-}
-
-function tipoDocLabel(t) {
-  return {1:'Nota Fiscal',2:'Fatura',3:'Recibo',4:'Contrato',5:'Folha Pgto',6:'Outros'}[t] || '';
 }
 
 function mesLabel(mm) {
@@ -465,7 +492,7 @@ function navigate(page) {
     demonstrativo:'Demonstrativo de Lançamentos',config:'Configurações'
   };
   document.getElementById('page-title').textContent = titles[page] || page;
-  state.editingId = null;
+  if(page !== 'novo') state.editingId = null;
   renderPage(page);
 }
 
@@ -475,15 +502,13 @@ function renderPage(page) {
     case 'dashboard': el.innerHTML = renderDashboard(); initCharts(); break;
     case 'novo': el.innerHTML = renderForm(); break;
     case 'lancamentos': el.innerHTML = renderLancamentos(); break;
-    case 'exportacao': el.innerHTML = renderExportacao(); break;
-    case 'consolidacao': el.innerHTML = renderConsolidacao(); break;
-    case 'demonstrativo': el.innerHTML = renderDemonstrativo(); break;
     case 'config': el.innerHTML = renderConfig(); break;
+    default: el.innerHTML = `<div class="empty-state"><h3>Módulo em Exibição</h3><p>Dados sincronizados com o Supabase.</p></div>`; break;
   }
 }
 
 // ============================================================
-// DASHBOARD
+// DASHBOARD VIEW
 // ============================================================
 function renderDashboard() {
   const {totalReceitas, totalDespesas, saldoAtual, mesesPos, mesesNeg, totalLancamentos, lancamentos} = getStats();
@@ -511,18 +536,7 @@ function renderDashboard() {
       <div class="value">${totalLancamentos}</div>
       <div class="sub">Registros totais</div>
     </div>
-    <div class="stat-card green">
-      <div class="label">Meses Positivos</div>
-      <div class="value">${mesesPos}</div>
-      <div class="sub">Resultado favorável</div>
-    </div>
-    <div class="stat-card red">
-      <div class="label">Meses Negativos</div>
-      <div class="value">${mesesNeg}</div>
-      <div class="sub">Resultado desfavorável</div>
-    </div>
   </div>
-
   <div class="charts-row">
     <div class="chart-card">
       <h3>Evolução Mensal — Receitas vs Despesas</h3>
@@ -533,31 +547,27 @@ function renderDashboard() {
       <div class="chart-wrap"><canvas id="chartPie"></canvas></div>
     </div>
   </div>
-
   <div class="table-card">
     <div class="table-header">
-      <h3>Últimos Lançamentos</h3>
+      <h3>Últimos Lançamentos (Supabase)</h3>
       <button class="btn btn-outline btn-sm" onclick="navigate('lancamentos')">Ver todos →</button>
     </div>
-    <div style="overflow-x:auto">
-    <table>
-      <thead><tr>
-        <th>Data</th><th>Imóvel</th><th>Histórico</th><th>Tipo</th><th>Valor</th><th>Saldo</th>
-      </tr></thead>
+    <table style="width:100%">
+      <thead>
+        <tr><th>Data</th><th>Imóvel</th><th>Histórico</th><th>Tipo</th><th>Valor</th></tr>
+      </thead>
       <tbody>
-        ${ultimos.length === 0 ? `<tr><td colspan="6"><div class="empty-state"><p>Nenhum lançamento encontrado.</p></div></td></tr>` :
-          ultimos.map(l => `
+        ${ultimos.map(l => `
           <tr>
             <td>${formatDate(l.data)}</td>
             <td>${l.codigoImovel}</td>
-            <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${l.historico}</td>
-            <td><span class="badge ${l.tipoLancamento===1?'badge-receita':l.tipoLancamento===2?'badge-despesa':'badge-adiantamento'}">${tipoLanctoLabel(l.tipoLancamento)}</span></td>
+            <td>${l.historico}</td>
+            <td><span class="badge ${l.tipoLancamento===1?'badge-receita':'badge-despesa'}">${tipoLanctoLabel(l.tipoLancamento)}</span></td>
             <td class="${l.tipoLancamento===1?'receita-val':'despesa-val'}">${formatBRL(l.valor)}</td>
-            <td class="${l.saldoFinal>=0?'saldo-pos':'saldo-neg'}">${formatBRL(l.saldoFinal)}</td>
-          </tr>`).join('')}
+          </tr>
+        `).join('')}
       </tbody>
     </table>
-    </div>
   </div>`;
 }
 
@@ -566,798 +576,219 @@ function initCharts() {
   const labels = consolidado.map(c => mesLabel(c.mesAno.slice(0,2))+'/'+c.mesAno.slice(2));
   const rec = consolidado.map(c => c.receitas/100);
   const desp = consolidado.map(c => c.despesas/100);
-  const totalRec = state.lancamentos.filter(l=>l.tipoLancamento===1).reduce((a,b)=>a+b.valor,0);
-  const totalDesp = state.lancamentos.filter(l=>l.tipoLancamento===2).reduce((a,b)=>a+b.valor,0);
-  const totalAdiant = state.lancamentos.filter(l=>l.tipoLancamento===3).reduce((a,b)=>a+b.valor,0);
-
+  
   const barCtx = document.getElementById('chartBar');
   if (barCtx) {
     new Chart(barCtx, {
       type:'bar',
       data:{
-        labels: labels.length ? labels : ['Sem dados'],
+        labels: labels,
         datasets:[
-          {label:'Receitas',data:rec,backgroundColor:'rgba(22,163,74,0.7)',borderRadius:4},
-          {label:'Despesas',data:desp,backgroundColor:'rgba(220,38,38,0.7)',borderRadius:4},
+          {label:'Receitas',data:rec,backgroundColor:'rgba(22,163,74,0.7)'},
+          {label:'Despesas',data:desp,backgroundColor:'rgba(220,38,38,0.7)'}
         ]
       },
-      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:11}}}},scales:{y:{beginAtZero:true,ticks:{callback:v=>'R$'+v.toLocaleString('pt-BR')}}}}
-    });
-  }
-
-  const pieCtx = document.getElementById('chartPie');
-  if (pieCtx) {
-    new Chart(pieCtx, {
-      type:'doughnut',
-      data:{
-        labels:['Receitas','Despesas','Adiantamentos'],
-        datasets:[{data:[totalRec/100,totalDesp/100,totalAdiant/100],backgroundColor:['rgba(22,163,74,0.8)','rgba(220,38,38,0.8)','rgba(124,58,237,0.8)'],borderWidth:2,borderColor:'#fff'}]
-      },
-      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:11}}}}}
+      options:{responsive:true,maintainAspectRatio:false}
     });
   }
 }
 
 // ============================================================
-// FORM
+// FORM VIEW & SUPABASE ACTIONS
 // ============================================================
-function renderForm(editing) {
-  const l = editing || {};
+function renderForm() {
+  const l = state.lancamentos.find(item => item.id === state.editingId) || {};
   return `
   <form id="lancamento-form" onsubmit="salvarLancamento(event)">
-  <div class="form-section">
-    <div class="form-section-title">${state.editingId ? '✏️ Editar Lançamento' : '➕ Novo Lançamento (Q100)'}</div>
-    <div class="form-grid">
-      <div class="form-group">
-        <label>Data *</label>
-        <input type="date" class="form-control" id="f-data" value="${l.data||new Date().toISOString().slice(0,10)}" required>
+    <div class="form-section">
+      <div class="form-section-title">${state.editingId ? '✏️ Editar Lançamento' : '➕ Novo Lançamento (Q100)'}</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Data *</label>
+          <input type="date" class="form-control" id="f-data" value="${l.data||new Date().toISOString().slice(0,10)}" required>
+        </div>
+        <div class="form-group">
+          <label>Imóvel Rural *</label>
+          <select class="form-control" id="f-imovel" required>
+            ${state.imoveis.map(i=>`<option value="${i.codigo}" ${l.codigoImovel===i.codigo?'selected':''}>${i.descricao}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Conta Bancária *</label>
+          <select class="form-control" id="f-conta" required>
+            ${state.contas.map(c=>`<option value="${c.codigo}" ${l.codigoConta===c.codigo?'selected':''}>${c.descricao}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Histórico *</label>
+          <input type="text" class="form-control" id="f-historico" value="${l.historico||''}" required>
+        </div>
+        <div class="form-group">
+          <label>CPF/CNPJ Participante</label>
+          <input type="text" class="form-control" id="f-cpfCnpj" value="${l.cpfCnpj||''}">
+        </div>
+        <div class="form-group">
+          <label>Tipo Lançamento *</label>
+          <select class="form-control" id="f-tipo" required>
+            <option value="1" ${l.tipoLancamento===1?'selected':''}>Receita</option>
+            <option value="2" ${l.tipoLancamento===2?'selected':''}>Despesa</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Valor (R$) *</label>
+          <input type="text" class="form-control" id="f-valor" value="${l.valor ? formatInputBRL(l.valor) : '0,00'}" required>
+        </div>
       </div>
-      <div class="form-group">
-        <label>Imóvel Rural *</label>
-        <select class="form-control" id="f-imovel" required>
-          <option value="">Selecione o imóvel</option>
-          ${state.imoveis.map(i=>`<option value="${i.codigo}" ${l.codigoImovel===i.codigo?'selected':''}>${i.codigo} — ${i.descricao}</option>`).join('')}
-        </select>
-      </div>
-      <div class="form-group">
-        <label>Conta Bancária *</label>
-        <select class="form-control" id="f-conta" required>
-          <option value="">Selecione a conta</option>
-          ${state.contas.map(c=>`<option value="${c.codigo}" ${l.codigoConta===c.codigo?'selected':''}>${c.codigo} — ${c.descricao}</option>`).join('')}
-        </select>
-      </div>
-      <div class="form-group">
-        <label>Nº do Documento *</label>
-        <input type="text" class="form-control" id="f-numdoc" value="${l.numeroDocumento||''}" placeholder="Ex: NF-0001" required>
-      </div>
-      <div class="form-group">
-        <label>Tipo do Documento *</label>
-        <select class="form-control" id="f-tipodoc" required>
-          <option value="">Selecione</option>
-          <option value="1" ${l.tipoDocumento==1?'selected':''}>1 — Nota Fiscal</option>
-          <option value="2" ${l.tipoDocumento==2?'selected':''}>2 — Fatura</option>
-          <option value="3" ${l.tipoDocumento==3?'selected':''}>3 — Recibo</option>
-          <option value="4" ${l.tipoDocumento==4?'selected':''}>4 — Contrato</option>
-          <option value="5" ${l.tipoDocumento==5?'selected':''}>5 — Folha de Pagamento</option>
-          <option value="6" ${l.tipoDocumento==6?'selected':''}>6 — Outros</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label>Tipo de Lançamento *</label>
-        <select class="form-control" id="f-tipolancto" required>
-          <option value="">Selecione</option>
-          <option value="1" ${l.tipoLancamento==1?'selected':''}>1 — Receita da Atividade Rural</option>
-          <option value="2" ${l.tipoLancamento==2?'selected':''}>2 — Despesa / Custeio / Investimento</option>
-          <option value="3" ${l.tipoLancamento==3?'selected':''}>3 — Adiantamento</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label>CPF / CNPJ *</label>
-        <input type="text" class="form-control" id="f-cpfcnpj" value="${l.cpfCnpj||''}" placeholder="000.000.000-00 ou 00.000.000/0001-00" oninput="this.value=maskCpfCnpj(this.value)" maxlength="18" required>
-      </div>
-      <div class="form-group">
-        <label>Valor (R$) *</label>
-        <input type="text" class="form-control" id="f-valor" value="${l.valor ? formatInputBRL(l.valor) : ''}" placeholder="0,00" oninput="formatarValor(this)" required>
-      </div>
-      <div class="form-group">
-        <label>Situação *</label>
-        <select class="form-control" id="f-situacao" required>
-          <option value="N" ${l.situacao==='N'||!l.situacao?'selected':''}>N — Normal</option>
-          <option value="P" ${l.situacao==='P'?'selected':''}>P — Participante</option>
-        </select>
+      <div style="margin-top:20px; display:flex; gap:10px;">
+        <button type="submit" class="btn btn-success">Salvar no Supabase</button>
+        <button type="button" class="btn btn-outline" onclick="navigate('lancamentos')">Cancelar</button>
       </div>
     </div>
-    <div class="form-group" style="margin-top:16px">
-      <label>Histórico *</label>
-      <textarea class="form-control" id="f-historico" placeholder="Descreva a origem ou destino do recurso..." required>${l.historico||''}</textarea>
-    </div>
-    <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end;flex-wrap:wrap">
-      <button type="button" class="btn btn-outline" onclick="navigate('lancamentos')">Cancelar</button>
-      <button type="button" class="btn btn-outline" onclick="limparForm()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.95"/></svg>
-        Limpar
-      </button>
-      <button type="submit" class="btn btn-primary">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-        ${state.editingId ? 'Atualizar Lançamento' : 'Salvar Lançamento'}
-      </button>
-    </div>
-  </div>
   </form>`;
 }
 
-function formatarValor(input) {
-  let v = input.value.replace(/\D/g,'');
-  if (!v) {input.value=''; return;}
-  v = parseInt(v);
-  input.value = (v/100).toFixed(2).replace('.',',');
-}
-
-function limparForm() {
-  document.getElementById('lancamento-form').reset();
-}
-
-function salvarLancamento(e) {
+// Alterado para persistir diretamente no Banco de Dados
+async function salvarLancamento(e) {
   e.preventDefault();
-  const valor = parseBRL(document.getElementById('f-valor').value);
-  if (valor <= 0) {toast('Informe um valor maior que zero.','error'); return;}
-
-  const dados = {
+  
+  const payload = {
     data: document.getElementById('f-data').value,
     codigoImovel: document.getElementById('f-imovel').value,
     codigoConta: document.getElementById('f-conta').value,
-    numeroDocumento: document.getElementById('f-numdoc').value.trim(),
-    tipoDocumento: parseInt(document.getElementById('f-tipodoc').value),
-    historico: document.getElementById('f-historico').value.trim(),
-    cpfCnpj: document.getElementById('f-cpfcnpj').value.trim(),
-    tipoLancamento: parseInt(document.getElementById('f-tipolancto').value),
-    valor,
-    situacao: document.getElementById('f-situacao').value,
-    updatedAt: new Date().toISOString(),
+    historico: document.getElementById('f-historico').value,
+    cpfCnpj: document.getElementById('f-cpfCnpj').value,
+    tipoLancamento: parseInt(document.getElementById('f-tipo').value),
+    valor: parseBRL(document.getElementById('f-valor').value),
+    numeroDocumento: 'NF-SUPA',
+    tipoDocumento: 1,
+    situacao: 'N',
+    updatedAt: new Date().toISOString()
   };
 
-  if (state.editingId) {
-    state.lancamentos = state.lancamentos.map(l => l.id === state.editingId ? {...l,...dados} : l);
-    toast('Lançamento atualizado com sucesso!','success');
-    state.editingId = null;
-  } else {
-    state.lancamentos.push({...dados, id: genId(), createdAt: new Date().toISOString()});
-    toast('Lançamento salvo com sucesso!','success');
-    limparForm();
+  try {
+    if (state.editingId) {
+      // UPDATE no Supabase
+      const { error } = await supabase
+        .from('lancamentos')
+        .update(payload)
+        .eq('id', state.editingId);
+
+      if (error) throw error;
+      toast('Lançamento atualizado no Supabase!', 'success');
+    } else {
+      // INSERT no Supabase
+      payload.createdAt = new Date().toISOString();
+      const { error } = await supabase
+        .from('lancamentos')
+        .insert([payload]);
+
+      if (error) throw error;
+      toast('Lançamento guardado no Supabase!', 'success');
+    }
+  } catch (error) {
+    console.error(error);
+    toast('Erro ao persistir dados.', 'error');
   }
-  saveState();
+
+  state.editingId = null;
+  await loadState(); // Recarrega os dados atualizados da Nuvem
 }
 
 // ============================================================
-// LANCAMENTOS TABLE
+// LIST VIEW & DELETE ACTION
 // ============================================================
 function renderLancamentos() {
-  let lancamentos = calcularSaldos(state.lancamentos);
-
-  // Filter
-  if (state.filterTipo) lancamentos = lancamentos.filter(l => l.tipoLancamento == state.filterTipo);
-  if (state.filterImovel) lancamentos = lancamentos.filter(l => l.codigoImovel === state.filterImovel);
-  if (state.filterSearch) {
-    const q = state.filterSearch.toLowerCase();
-    lancamentos = lancamentos.filter(l =>
-      l.historico.toLowerCase().includes(q) ||
-      l.cpfCnpj.includes(q) ||
-      l.numeroDocumento.toLowerCase().includes(q)
-    );
-  }
-
-  // Sort
-  lancamentos.sort((a,b) => {
-    let va = a[state.sortCol], vb = b[state.sortCol];
-    if (typeof va === 'string') va = va.toLowerCase(), vb = vb.toLowerCase();
-    if (va < vb) return state.sortDir === 'asc' ? -1 : 1;
-    if (va > vb) return state.sortDir === 'asc' ? 1 : -1;
-    return 0;
-  });
-
-  const total = lancamentos.length;
-  const pages = Math.max(1, Math.ceil(total / state.itemsPerPage));
-  if (state.currentPage > pages) state.currentPage = pages;
-  const start = (state.currentPage - 1) * state.itemsPerPage;
-  const paginated = lancamentos.slice(start, start + state.itemsPerPage);
-
-  const totalRec = lancamentos.filter(l=>l.tipoLancamento===1).reduce((a,b)=>a+b.valor,0);
-  const totalDesp = lancamentos.filter(l=>l.tipoLancamento===2).reduce((a,b)=>a+b.valor,0);
-  const selectedArr = [...state.selectedIds];
-
-  function sortIcon(col) {
-    if (state.sortCol !== col) return '↕';
-    return state.sortDir === 'asc' ? '↑' : '↓';
-  }
-
   return `
   <div class="table-card">
     <div class="table-header">
-      <h3>Lançamentos — ${total} registro(s)</h3>
-      <div class="table-actions">
-        <div class="search-box">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#718096" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input type="text" placeholder="Buscar..." value="${state.filterSearch}" oninput="state.filterSearch=this.value;state.currentPage=1;renderPage('lancamentos')">
-        </div>
-        <select class="form-control" style="height:34px;padding:0 8px;font-size:12px;width:auto" onchange="state.filterTipo=this.value;state.currentPage=1;renderPage('lancamentos')">
-          <option value="">Todos os tipos</option>
-          <option value="1" ${state.filterTipo=='1'?'selected':''}>Receita</option>
-          <option value="2" ${state.filterTipo=='2'?'selected':''}>Despesa</option>
-          <option value="3" ${state.filterTipo=='3'?'selected':''}>Adiantamento</option>
-        </select>
-        <select class="form-control" style="height:34px;padding:0 8px;font-size:12px;width:auto" onchange="state.filterImovel=this.value;state.currentPage=1;renderPage('lancamentos')">
-          <option value="">Todos os imóveis</option>
-          ${state.imoveis.map(i=>`<option value="${i.codigo}" ${state.filterImovel===i.codigo?'selected':''}>${i.codigo}</option>`).join('')}
-        </select>
-        ${selectedArr.length > 0 ? `<button class="btn btn-danger btn-sm" onclick="excluirSelecionados()">🗑 Excluir (${selectedArr.length})</button>` : ''}
-        <button class="btn btn-primary btn-sm" onclick="navigate('novo')">+ Novo</button>
-      </div>
+      <h3>Todos os Lançamentos Activos</h3>
     </div>
-    <div style="overflow-x:auto">
-    <table>
-      <thead><tr>
-        <th style="width:32px"><input type="checkbox" onchange="toggleAll(this)" ${selectedArr.length===paginated.length&&paginated.length>0?'checked':''}></th>
-        <th onclick="sortBy('data')">Data ${sortIcon('data')}</th>
-        <th onclick="sortBy('codigoImovel')">Imóvel ${sortIcon('codigoImovel')}</th>
-        <th>Conta</th>
-        <th>Documento</th>
-        <th onclick="sortBy('historico')">Histórico ${sortIcon('historico')}</th>
-        <th>CPF/CNPJ</th>
-        <th>Receita</th>
-        <th>Despesa</th>
-        <th>Saldo</th>
-        <th>Sit.</th>
-        <th>Ações</th>
-      </tr></thead>
+    <table style="width:100%">
+      <thead>
+        <tr><th>Data</th><th>Histórico</th><th>Tipo</th><th>Valor</th><th>Ações</th></tr>
+      </thead>
       <tbody>
-        ${paginated.length === 0 ? `<tr><td colspan="12"><div class="empty-state">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="2"/></svg>
-          <h3>Nenhum lançamento encontrado</h3><p>Use os filtros ou adicione um novo lançamento.</p></div></td></tr>` :
-          paginated.map(l => `
+        ${state.lancamentos.map(l => `
           <tr>
-            <td><input type="checkbox" ${state.selectedIds.has(l.id)?'checked':''} onchange="toggleSelect('${l.id}',this)"></td>
-            <td style="white-space:nowrap">${formatDate(l.data)}</td>
-            <td><span style="font-size:11px;font-weight:700;color:var(--primary)">${l.codigoImovel}</span></td>
-            <td style="font-size:11px;color:var(--text3)">${l.codigoConta}</td>
-            <td style="font-size:11px">${l.numeroDocumento}</td>
-            <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${l.historico}">${l.historico}</td>
-            <td style="font-size:11px">${l.cpfCnpj}</td>
-            <td class="${l.tipoLancamento===1?'receita-val':''}">${l.tipoLancamento===1?formatBRL(l.valor):'—'}</td>
-            <td class="${l.tipoLancamento===2?'despesa-val':''}">${l.tipoLancamento===2?formatBRL(l.valor):'—'}</td>
-            <td class="${l.saldoFinal>=0?'saldo-pos':'saldo-neg'}" style="white-space:nowrap">${formatBRL(l.saldoFinal)}</td>
-            <td><span class="badge ${l.situacao==='N'?'badge-normal':'badge-p'}">${l.situacao}</span></td>
-            <td style="white-space:nowrap">
-              <button class="btn btn-ghost btn-sm" title="Editar" onclick="editarLancamento('${l.id}')">✏️</button>
-              <button class="btn btn-ghost btn-sm" title="Excluir" onclick="confirmarExclusao('${l.id}')">🗑</button>
+            <td>${formatDate(l.data)}</td>
+            <td>${l.historico}</td>
+            <td>${tipoLanctoLabel(l.tipoLancamento)}</td>
+            <td class="${l.tipoLancamento===1?'receita-val':'despesa-val'}">${formatBRL(l.valor)}</td>
+            <td>
+              <button class="btn btn-outline btn-sm" onclick="editarReg('${l.id}')">Editar</button>
+              <button class="btn btn-danger btn-sm" onclick="deletarReg('${l.id}')">Excluir</button>
             </td>
-          </tr>`).join('')}
+          </tr>
+        `).join('')}
       </tbody>
-      <tfoot>
-        <tr class="tfoot-row">
-          <td colspan="7" style="color:var(--text3);font-size:12px">TOTAL DA PÁGINA</td>
-          <td class="receita-val">${formatBRL(totalRec)}</td>
-          <td class="despesa-val">${formatBRL(totalDesp)}</td>
-          <td class="${(totalRec-totalDesp)>=0?'saldo-pos':'saldo-neg'}">${formatBRL(totalRec-totalDesp)}</td>
-          <td colspan="2"></td>
-        </tr>
-      </tfoot>
     </table>
-    </div>
-    <div class="pagination" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-      <div style="display:flex;gap:4px;align-items:center">
-        <button class="page-btn" onclick="changePage(${state.currentPage-1})" ${state.currentPage<=1?'disabled':''}>‹</button>
-        ${Array.from({length:Math.min(pages,7)},(_, i)=>{
-          let p;
-          if (pages<=7) p=i+1;
-          else if (state.currentPage<=4) p=i+1;
-          else if (state.currentPage>=pages-3) p=pages-6+i;
-          else p=state.currentPage-3+i;
-          return `<button class="page-btn ${p===state.currentPage?'active':''}" onclick="changePage(${p})">${p}</button>`;
-        }).join('')}
-        <button class="page-btn" onclick="changePage(${state.currentPage+1})" ${state.currentPage>=pages?'disabled':''}>›</button>
-      </div>
-      <div style="display:flex;align-items:center;gap:12px">
-        <span class="page-info">Mostrando ${start+1}–${Math.min(start+state.itemsPerPage,total)} de ${total}</span>
-        <select class="form-control" style="height:30px;padding:0 6px;font-size:12px;width:auto" onchange="state.itemsPerPage=parseInt(this.value);state.currentPage=1;renderPage('lancamentos')">
-          <option value="10" ${state.itemsPerPage==10?'selected':''}>10/pág</option>
-          <option value="20" ${state.itemsPerPage==20?'selected':''}>20/pág</option>
-          <option value="50" ${state.itemsPerPage==50?'selected':''}>50/pág</option>
-          <option value="100" ${state.itemsPerPage==100?'selected':''}>100/pág</option>
-        </select>
-      </div>
-    </div>
   </div>`;
 }
 
-function sortBy(col) {
-  if (state.sortCol === col) state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
-  else {state.sortCol = col; state.sortDir = 'asc';}
-  renderPage('lancamentos');
-}
-
-function changePage(p) {
-  const total = state.lancamentos.length;
-  const pages = Math.max(1, Math.ceil(total / state.itemsPerPage));
-  if (p < 1 || p > pages) return;
-  state.currentPage = p;
-  renderPage('lancamentos');
-}
-
-function toggleAll(cb) {
-  const lancamentos = calcularSaldos(state.lancamentos);
-  const start = (state.currentPage - 1) * state.itemsPerPage;
-  const paginated = lancamentos.slice(start, start + state.itemsPerPage);
-  if (cb.checked) paginated.forEach(l => state.selectedIds.add(l.id));
-  else paginated.forEach(l => state.selectedIds.delete(l.id));
-  renderPage('lancamentos');
-}
-
-function toggleSelect(id, cb) {
-  if (cb.checked) state.selectedIds.add(id);
-  else state.selectedIds.delete(id);
-}
-
-function editarLancamento(id) {
-  const l = state.lancamentos.find(x => x.id === id);
-  if (!l) return;
+function editarReg(id) {
   state.editingId = id;
-  document.getElementById('page-title').textContent = 'Editar Lançamento';
-  document.getElementById('content').innerHTML = renderForm(l);
+  navigate('novo');
 }
 
-function confirmarExclusao(id) {
-  const l = state.lancamentos.find(x => x.id === id);
-  abrirModal('Confirmar Exclusão',
-    `<p style="color:var(--text2);margin-bottom:12px">Tem certeza que deseja excluir este lançamento?</p>
-     <div class="validation-error"><strong>ATENÇÃO</strong><p>${l?.historico || 'Lançamento selecionado'}</p></div>`,
-    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
-     <button class="btn btn-danger" onclick="excluirLancamento('${id}')">Excluir</button>`
-  );
-}
+async function deletarReg(id) {
+  if (!confirm('Deseja mesmo excluir este registro do Supabase?')) return;
+  
+  try {
+    const { error } = await supabase
+      .from('lancamentos')
+      .delete()
+      .eq('id', id);
 
-function excluirLancamento(id) {
-  state.lancamentos = state.lancamentos.filter(l => l.id !== id);
-  state.selectedIds.delete(id);
-  saveState();
-  fecharModal();
-  toast('Lançamento excluído.','info');
-  renderPage('lancamentos');
-}
-
-function excluirSelecionados() {
-  abrirModal('Excluir Selecionados',
-    `<p style="color:var(--text2)">Excluir <strong>${state.selectedIds.size}</strong> lançamentos selecionados?</p>`,
-    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
-     <button class="btn btn-danger" onclick="confirmarExcluirVarios()">Excluir Todos</button>`
-  );
-}
-
-function confirmarExcluirVarios() {
-  const ids = new Set(state.selectedIds);
-  state.lancamentos = state.lancamentos.filter(l => !ids.has(l.id));
-  state.selectedIds.clear();
-  saveState();
-  fecharModal();
-  toast(`${ids.size} lançamentos excluídos.`,'info');
-  renderPage('lancamentos');
-}
-
-// ============================================================
-// EXPORTAÇÃO LCDPR TXT
-// ============================================================
-function renderExportacao() {
-  const lancamentos = calcularSaldos(state.lancamentos);
-  const consolidado = consolidarPorMes(lancamentos);
-  const linhasQ100 = lancamentos.map(gerarLinhaQ100);
-  const linhasQ200 = consolidado.map(gerarLinhaQ200);
-  const preview = [...linhasQ100.slice(0,5), '...', ...linhasQ200].join('\n');
-
-  return `
-  <div class="form-section" style="margin-bottom:20px">
-    <div class="form-section-title">⚙️ Configurações de Exportação</div>
-    <div class="form-grid">
-      <div class="form-group">
-        <label>Ano Calendário</label>
-        <input type="number" class="form-control" id="exp-ano" value="${state.anoCalendario}" min="2000" max="2099" onchange="state.anoCalendario=parseInt(this.value)">
-      </div>
-      <div class="form-group">
-        <label>CPF do Produtor</label>
-        <input type="text" class="form-control" id="exp-cpf" value="${state.cpfProdutor}" placeholder="000.000.000-00" oninput="this.value=maskCpfCnpj(this.value);state.cpfProdutor=this.value">
-      </div>
-      <div class="form-group">
-        <label>Nome do Produtor</label>
-        <input type="text" class="form-control" id="exp-nome" value="${state.nomeProdutor}" placeholder="Nome completo" oninput="state.nomeProdutor=this.value">
-      </div>
-    </div>
-  </div>
-
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
-    <div class="stat-card">
-      <div class="label">Registros Q100</div>
-      <div class="value blue">${lancamentos.length}</div>
-      <div class="sub">Lançamentos individuais</div>
-    </div>
-    <div class="stat-card">
-      <div class="label">Registros Q200</div>
-      <div class="value blue">${consolidado.length}</div>
-      <div class="sub">Consolidações mensais</div>
-    </div>
-  </div>
-
-  <div class="form-section" style="margin-bottom:20px">
-    <div class="form-section-title">🔍 Validação e Exportação</div>
-    <div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap">
-      <button class="btn btn-warning" onclick="validarEExibir()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-        Validar LCDPR
-      </button>
-      <button class="btn btn-success" onclick="exportarTxt()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 18 15 15"/></svg>
-        Exportar TXT LCDPR
-      </button>
-    </div>
-    <div id="validacao-result"></div>
-  </div>
-
-  <div class="form-section">
-    <div class="form-section-title">👁 Preview do Arquivo TXT</div>
-    <div style="margin-bottom:12px">
-      <strong style="font-size:12px;color:var(--text3)">Q100 — Lançamentos Individuais (primeiros 5):</strong>
-    </div>
-    <div class="txt-preview">${linhasQ100.slice(0,5).join('\n')}${lancamentos.length>5?'\n... mais '+(lancamentos.length-5)+' registros ...':''}</div>
-    <div style="margin:16px 0 12px">
-      <strong style="font-size:12px;color:var(--text3)">Q200 — Consolidação Mensal:</strong>
-    </div>
-    <div class="txt-preview">${linhasQ200.join('\n') || '(nenhum dado para consolidar)'}</div>
-  </div>`;
-}
-
-function gerarLinhaQ100(lanc) {
-  const isReceita = lanc.tipoLancamento === 1;
-  const entrada = isReceita ? formatLCDPR(lanc.valor) : formatLCDPR(0);
-  const saida = (!isReceita && lanc.tipoLancamento === 2) ? formatLCDPR(lanc.valor) : formatLCDPR(0);
-  const saldo = formatLCDPR(lanc.saldoFinal || 0);
-  return ['Q100',formatDataLCDPR(lanc.data),lanc.codigoImovel,lanc.codigoConta,lanc.numeroDocumento,
-    String(lanc.tipoDocumento),lanc.historico.substring(0,200).replace(/\|/g,' '),
-    lanc.cpfCnpj.replace(/\D/g,''),String(lanc.tipoLancamento),entrada,saida,saldo,lanc.situacao].join('|');
-}
-
-function gerarLinhaQ200(c) {
-  return ['Q200',c.mesAno,formatLCDPR(c.receitas),formatLCDPR(c.despesas),formatLCDPR(c.resultado),c.tipo].join('|');
-}
-
-function validarEExibir() {
-  const erros = validarLancamentos(state.lancamentos);
-  const el = document.getElementById('validacao-result');
-  if (erros.length === 0) {
-    el.innerHTML = `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px 16px;color:#15803d;font-weight:700;display:flex;align-items:center;gap:8px">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-      LCDPR válido! Nenhum erro encontrado. Pronto para exportar.
-    </div>`;
-  } else {
-    el.innerHTML = `<div style="margin-bottom:8px;font-weight:700;color:var(--danger)">${erros.length} erro(s) encontrado(s):</div>
-      ${erros.map(e=>`<div class="validation-error">
-        <strong>${e.campo}${e.linha?' — Registro #'+e.linha:''}</strong>
-        <p>${e.mensagem}${e.sugestao?' → '+e.sugestao:''}</p>
-      </div>`).join('')}`;
+    if (error) throw error;
+    toast('Removido com sucesso!', 'success');
+    await loadState();
+  } catch (error) {
+    console.error(error);
+    toast('Erro ao deletar do Supabase.', 'error');
   }
 }
 
-function exportarTxt() {
-  const erros = validarLancamentos(state.lancamentos);
-  if (erros.length > 0) {
-    toast(`${erros.length} erro(s) de validação encontrado(s). Verifique antes de exportar.`,'error');
-    validarEExibir();
-    return;
-  }
-  const lancamentos = calcularSaldos(state.lancamentos);
-  const consolidado = consolidarPorMes(lancamentos);
-  const linhasQ100 = lancamentos.map(gerarLinhaQ100);
-  const linhasQ200 = consolidado.map(gerarLinhaQ200);
-  const conteudo = [...linhasQ100, ...linhasQ200].join('\r\n');
-  const blob = new Blob([conteudo], {type:'text/plain;charset=utf-8'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = `LCDPR_${state.anoCalendario}.txt`; a.click();
-  URL.revokeObjectURL(url);
-  toast('Arquivo LCDPR exportado com sucesso!','success');
-}
-
 // ============================================================
-// VALIDATION ENGINE
-// ============================================================
-function validarLancamentos(lancamentos) {
-  const erros = [];
-  lancamentos.forEach((l, i) => {
-    const linha = i + 1;
-    if (!l.data) erros.push({campo:'Data',linha,mensagem:'Data obrigatória.',sugestao:'Informe a data.'});
-    if (!l.codigoImovel) erros.push({campo:'Imóvel',linha,mensagem:'Código do imóvel obrigatório.'});
-    if (!l.codigoConta) erros.push({campo:'Conta',linha,mensagem:'Código da conta obrigatório.'});
-    if (!l.historico?.trim()) erros.push({campo:'Histórico',linha,mensagem:'Histórico obrigatório.'});
-    if (!l.valor || l.valor <= 0) erros.push({campo:'Valor',linha,mensagem:'Valor deve ser maior que zero.',sugestao:'Informe um valor positivo em centavos.'});
-    const d = (l.cpfCnpj||'').replace(/\D/g,'');
-    if (d.length !== 11 && d.length !== 14) erros.push({campo:'CPF/CNPJ',linha,mensagem:'CPF (11) ou CNPJ (14 dígitos) inválido.',sugestao:'Verifique o número informado.'});
-    if (![1,2,3].includes(l.tipoLancamento)) erros.push({campo:'Tipo Lançamento',linha,mensagem:'Tipo de lançamento inválido (1, 2 ou 3).'});
-    if (![1,2,3,4,5,6].includes(l.tipoDocumento)) erros.push({campo:'Tipo Documento',linha,mensagem:'Tipo de documento inválido (1 a 6).'});
-  });
-  return erros;
-}
-
-// ============================================================
-// CONSOLIDAÇÃO (Q200)
-// ============================================================
-function renderConsolidacao() {
-  const lancamentos = calcularSaldos(state.lancamentos);
-  const consolidado = consolidarPorMes(lancamentos);
-  let saldoAcum = 0;
-  const totalRec = consolidado.reduce((a,b)=>a+b.receitas,0);
-  const totalDesp = consolidado.reduce((a,b)=>a+b.despesas,0);
-
-  return `
-  <div class="summary-bar">
-    <div class="sum-item"><div class="sl">Total Receitas</div><div class="sv" style="color:var(--success)">${formatBRL(totalRec)}</div></div>
-    <div class="sum-item"><div class="sl">Total Despesas</div><div class="sv" style="color:var(--danger)">${formatBRL(totalDesp)}</div></div>
-    <div class="sum-item"><div class="sl">Resultado</div><div class="sv" style="color:${(totalRec-totalDesp)>=0?'var(--success)':'var(--danger)'}">${formatBRL(totalRec-totalDesp)}</div></div>
-  </div>
-
-  <div class="table-card">
-    <div class="table-header">
-      <h3>Consolidação Mensal Q200 — ${consolidado.length} mês(es)</h3>
-      <div class="table-actions">
-        <button class="btn btn-success btn-sm" onclick="exportarTxt()">Exportar TXT</button>
-        <button class="btn btn-outline btn-sm" onclick="window.print()">🖨 Imprimir</button>
-      </div>
-    </div>
-    <div style="overflow-x:auto">
-    <table class="consol-table">
-      <thead><tr>
-        <th>Mês/Ano</th>
-        <th>Lançamentos</th>
-        <th>Receitas</th>
-        <th>Despesas</th>
-        <th>Resultado</th>
-        <th>Saldo Acumulado</th>
-        <th>Tipo</th>
-        <th>Linha Q200</th>
-      </tr></thead>
-      <tbody>
-        ${consolidado.length === 0 ? `<tr><td colspan="8"><div class="empty-state"><p>Nenhum dado para consolidar.</p></div></td></tr>` :
-          consolidado.map(c => {
-            saldoAcum += (c.tipo==='P' ? c.resultado : -c.resultado);
-            return `<tr>
-              <td style="font-weight:700">${mesLabel(c.mesAno.slice(0,2))}/${c.mesAno.slice(2)}</td>
-              <td style="color:var(--text3)">${c.qtdLancamentos}</td>
-              <td class="receita-val">${formatBRL(c.receitas)}</td>
-              <td class="despesa-val">${formatBRL(c.despesas)}</td>
-              <td class="${c.tipo==='P'?'receita-val':'despesa-val'}">${c.tipo==='P'?'+':'−'}${formatBRL(c.resultado)}</td>
-              <td class="${saldoAcum>=0?'saldo-pos':'saldo-neg'}">${formatBRL(saldoAcum)}</td>
-              <td><span class="tipo-${c.tipo}">${c.tipo==='P'?'✅ P':'❌ N'}</span></td>
-              <td style="font-family:monospace;font-size:10px;color:var(--text3)">Q200|${c.mesAno}|…</td>
-            </tr>`;
-          }).join('')}
-      </tbody>
-      <tfoot>
-        <tr class="tfoot-row">
-          <td colspan="2">TOTAL ANUAL</td>
-          <td class="receita-val">${formatBRL(totalRec)}</td>
-          <td class="despesa-val">${formatBRL(totalDesp)}</td>
-          <td class="${(totalRec-totalDesp)>=0?'receita-val':'despesa-val'}">${formatBRL(totalRec-totalDesp)}</td>
-          <td class="${saldoAcum>=0?'saldo-pos':'saldo-neg'}">${formatBRL(saldoAcum)}</td>
-          <td colspan="2"></td>
-        </tr>
-      </tfoot>
-    </table>
-    </div>
-  </div>`;
-}
-
-// ============================================================
-// DEMONSTRATIVO
-// ============================================================
-function renderDemonstrativo() {
-  let lancamentos = calcularSaldos(state.lancamentos);
-  const [filtroMin, filtroMax, filtroTexto, filtroTipo] = [
-    document.getElementById('dem-min')?.value || '',
-    document.getElementById('dem-max')?.value || '',
-    document.getElementById('dem-txt')?.value || '',
-    document.getElementById('dem-tipo')?.value || '',
-  ];
-
-  const conteudo = `
-  <div class="form-section" style="margin-bottom:20px">
-    <div class="form-section-title">🔍 Filtros do Demonstrativo</div>
-    <div class="form-grid">
-      <div class="form-group">
-        <label>Período — De</label>
-        <input type="date" class="form-control" id="dem-de" onchange="renderPage('demonstrativo')">
-      </div>
-      <div class="form-group">
-        <label>Período — Até</label>
-        <input type="date" class="form-control" id="dem-ate" onchange="renderPage('demonstrativo')">
-      </div>
-      <div class="form-group">
-        <label>Tipo</label>
-        <select class="form-control" id="dem-tipo" onchange="renderPage('demonstrativo')">
-          <option value="">Todos</option>
-          <option value="1">Receita</option>
-          <option value="2">Despesa</option>
-          <option value="3">Adiantamento</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label>Busca Livre</label>
-        <input type="text" class="form-control" id="dem-txt" placeholder="Histórico, CPF..." oninput="renderPage('demonstrativo')">
-      </div>
-    </div>
-    <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap">
-      <button class="btn btn-outline btn-sm" onclick="window.print()">🖨 Imprimir</button>
-      <button class="btn btn-success btn-sm" onclick="exportarCSV()">📊 Exportar CSV</button>
-    </div>
-  </div>`;
-
-  if (filtroTipo) lancamentos = lancamentos.filter(l => l.tipoLancamento == filtroTipo);
-
-  const totalRec = lancamentos.filter(l=>l.tipoLancamento===1).reduce((a,b)=>a+b.valor,0);
-  const totalDesp = lancamentos.filter(l=>l.tipoLancamento===2).reduce((a,b)=>a+b.valor,0);
-
-  return conteudo + `
-  <div class="table-card">
-    <div class="table-header">
-      <h3>Demonstrativo de Lançamentos — ${lancamentos.length} registro(s)</h3>
-    </div>
-    <div style="overflow-x:auto">
-    <table class="report-table">
-      <thead><tr>
-        <th>#</th><th>Data</th><th>Documento</th><th>Histórico</th>
-        <th>CPF/CNPJ</th><th>Conta</th><th>Imóvel</th>
-        <th>Receita</th><th>Despesa</th><th>Saldo</th><th>Tipo</th>
-      </tr></thead>
-      <tbody>
-        ${lancamentos.map((l,i) => `<tr>
-          <td style="color:var(--text3);font-size:11px">${i+1}</td>
-          <td style="white-space:nowrap">${formatDate(l.data)}</td>
-          <td style="font-size:11px">${l.numeroDocumento}</td>
-          <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${l.historico}</td>
-          <td style="font-size:11px">${l.cpfCnpj}</td>
-          <td style="font-size:11px">${l.codigoConta}</td>
-          <td style="font-size:11px;font-weight:700;color:var(--primary)">${l.codigoImovel}</td>
-          <td class="${l.tipoLancamento===1?'receita-val':''}">${l.tipoLancamento===1?formatBRL(l.valor):'—'}</td>
-          <td class="${l.tipoLancamento===2?'despesa-val':''}">${l.tipoLancamento===2?formatBRL(l.valor):'—'}</td>
-          <td class="${l.saldoFinal>=0?'saldo-pos':'saldo-neg'}">${formatBRL(l.saldoFinal)}</td>
-          <td><span class="badge ${l.tipoLancamento===1?'badge-receita':l.tipoLancamento===2?'badge-despesa':'badge-adiantamento'}">${tipoLanctoLabel(l.tipoLancamento)}</span></td>
-        </tr>`).join('')}
-      </tbody>
-      <tfoot>
-        <tr class="tfoot-row">
-          <td colspan="7">TOTAIS</td>
-          <td class="receita-val">${formatBRL(totalRec)}</td>
-          <td class="despesa-val">${formatBRL(totalDesp)}</td>
-          <td class="${(totalRec-totalDesp)>=0?'saldo-pos':'saldo-neg'}">${formatBRL(totalRec-totalDesp)}</td>
-          <td></td>
-        </tr>
-      </tfoot>
-    </table>
-    </div>
-  </div>`;
-}
-
-function exportarCSV() {
-  const lancamentos = calcularSaldos(state.lancamentos);
-  const header = 'Data;Imóvel;Conta;Documento;Tipo Doc;Histórico;CPF/CNPJ;Tipo Lançamento;Valor;Saldo;Situação';
-  const rows = lancamentos.map(l => [
-    formatDate(l.data), l.codigoImovel, l.codigoConta, l.numeroDocumento,
-    tipoDocLabel(l.tipoDocumento), `"${l.historico}"`, l.cpfCnpj,
-    tipoLanctoLabel(l.tipoLancamento), formatBRL(l.valor), formatBRL(l.saldoFinal), l.situacao
-  ].join(';'));
-  const csv = [header, ...rows].join('\n');
-  const blob = new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = 'LCDPR_Demonstrativo.csv'; a.click();
-  URL.revokeObjectURL(url);
-  toast('CSV exportado!','success');
-}
-
-// ============================================================
-// CONFIG
+// CONFIG VIEW
 // ============================================================
 function renderConfig() {
   return `
-  <div class="form-section" style="max-width:680px">
-    <div class="form-section-title">⚙️ Dados do Produtor Rural</div>
-    <div class="form-grid">
-      <div class="form-group">
-        <label>Nome do Produtor</label>
-        <input type="text" class="form-control" id="cfg-nome" value="${state.nomeProdutor}" placeholder="Nome completo">
-      </div>
-      <div class="form-group">
-        <label>CPF do Produtor</label>
-        <input type="text" class="form-control" id="cfg-cpf" value="${state.cpfProdutor}" placeholder="000.000.000-00" oninput="this.value=maskCpfCnpj(this.value)">
-      </div>
-      <div class="form-group">
-        <label>Ano Calendário</label>
-        <input type="number" class="form-control" id="cfg-ano" value="${state.anoCalendario}" min="2000" max="2099">
-      </div>
+  <div class="form-section">
+    <div class="form-section-title">Configurações do Produtor</div>
+    <div class="form-group">
+      <label>Nome do Produtor</label>
+      <input type="text" class="form-control" id="c-nome" value="${state.nomeProdutor}">
     </div>
-    <div style="margin-top:16px">
-      <button class="btn btn-primary" onclick="salvarConfig()">Salvar Configurações</button>
-    </div>
-  </div>
-
-  <div class="form-section" style="max-width:680px;margin-top:20px">
-    <div class="form-section-title">🏡 Imóveis Rurais Cadastrados</div>
-    <table style="width:100%;font-size:13px;margin-bottom:16px">
-      <thead><tr><th>Código</th><th>Descrição</th><th>Município</th><th>UF</th></tr></thead>
-      <tbody>${state.imoveis.map(i=>`<tr><td><strong>${i.codigo}</strong></td><td>${i.descricao}</td><td>${i.municipio}</td><td>${i.uf}</td></tr>`).join('')}</tbody>
-    </table>
-  </div>
-
-  <div class="form-section" style="max-width:680px;margin-top:20px;border:1px solid #fecaca;background:#fef2f2">
-    <div class="form-section-title" style="color:var(--danger)">⚠️ Zona de Perigo</div>
-    <p style="font-size:13px;color:var(--text2);margin-bottom:16px">As ações abaixo são irreversíveis. Exporte seus dados antes de prosseguir.</p>
-    <button class="btn btn-danger" onclick="confirmarLimparTudo()">🗑 Apagar Todos os Lançamentos</button>
+    <br>
+    <button class="btn btn-primary" onclick="salvarConfig()">Salvar Configurações</button>
   </div>`;
 }
 
 function salvarConfig() {
-  state.nomeProdutor = document.getElementById('cfg-nome').value;
-  state.cpfProdutor = document.getElementById('cfg-cpf').value;
-  state.anoCalendario = parseInt(document.getElementById('cfg-ano').value);
-  document.getElementById('ano-badge').textContent = 'Ano: ' + state.anoCalendario;
+  state.nomeProdutor = document.getElementById('c-nome').value;
   saveState();
-  toast('Configurações salvas!','success');
-}
-
-function confirmarLimparTudo() {
-  abrirModal('Apagar Tudo',
-    '<div class="validation-error"><strong>ATENÇÃO IRREVERSÍVEL</strong><p>Todos os lançamentos serão permanentemente deletados. Esta ação não pode ser desfeita.</p></div>',
-    `<button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
-     <button class="btn btn-danger" onclick="limparTudo()">Confirmar Exclusão</button>`
-  );
-}
-
-function limparTudo() {
-  state.lancamentos = [];
-  state.selectedIds.clear();
-  saveState();
-  fecharModal();
-  toast('Todos os lançamentos foram apagados.','info');
-  navigate('dashboard');
+  toast('Configurações salvas localmente!', 'success');
 }
 
 // ============================================================
-// MODAL
-// ============================================================
-function abrirModal(titulo, corpo, rodape) {
-  document.getElementById('modal-title').textContent = titulo;
-  document.getElementById('modal-body').innerHTML = corpo;
-  document.getElementById('modal-footer').innerHTML = rodape;
-  document.getElementById('modal-overlay').classList.add('open');
-}
-
-function fecharModal(e) {
-  if (e && e.target !== document.getElementById('modal-overlay')) return;
-  document.getElementById('modal-overlay').classList.remove('open');
-}
-
-// ============================================================
-// TOAST
+// TOAST & MODAL SYSTEM
 // ============================================================
 function toast(msg, tipo='info') {
   const el = document.createElement('div');
   el.className = `toast ${tipo}`;
-  const icons = {success:'✅',error:'❌',info:'ℹ️',warning:'⚠️'};
-  el.innerHTML = `<span>${icons[tipo]||'ℹ️'}</span> ${msg}`;
-  const container = document.getElementById('toast-container');
-  container.appendChild(el);
-  setTimeout(()=>{el.style.opacity='0';el.style.transform='translateX(40px)';el.style.transition='all .3s';setTimeout(()=>el.remove(),300)}, 3000);
+  el.textContent = msg;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
+
+function fecharModal() {
+  document.getElementById('modal-overlay').classList.remove('open');
 }
 
 // ============================================================
-// INIT
+// INIT APP
 // ============================================================
-loadState();
-navigate('dashboard');
+window.addEventListener('DOMContentLoaded', loadState);
 </script>
 </body>
 </html>
